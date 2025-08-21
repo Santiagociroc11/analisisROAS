@@ -327,14 +327,23 @@ function build_interactive_data($revenue_data, $segmentations_data, $spend_mappi
             ];
         }
         
-        // Buscar si ya existe esta segmentación normalizada
+        // Buscar si ya existe esta segmentación (comparar SEGMENTACION de BD con Ad Set Name del CSV)
         $seg_found = false;
         foreach ($ads[$ad_name_normalized]['segmentations'] as &$existing_seg) {
             if (normalize_ad_name($existing_seg['name']) === $segmentation_normalized) {
-                // Agregar a la segmentación existente
-                $existing_seg['revenue'] += $revenue;
-                $existing_seg['leads'] += $leads;
-                $existing_seg['sales'] += $sales;
+                // Verificar que no se dupliquen métricas de la misma fila de BD
+                $unique_bd_key = $ad_name_normalized . '|' . $segmentation_normalized . '|' . $revenue . '|' . $leads;
+                if (!isset($existing_seg['processed_bd_keys'])) {
+                    $existing_seg['processed_bd_keys'] = [];
+                }
+                
+                if (!in_array($unique_bd_key, $existing_seg['processed_bd_keys'])) {
+                    // Agregar a la segmentación existente solo si no se ha procesado antes
+                    $existing_seg['revenue'] += $revenue;
+                    $existing_seg['leads'] += $leads;
+                    $existing_seg['sales'] += $sales;
+                    $existing_seg['processed_bd_keys'][] = $unique_bd_key;
+                }
                 $existing_seg['campaign_name'] = $campaign_name; // Asegurar que tenga la campaña
                 $existing_seg['conversion_rate'] = $existing_seg['leads'] > 0 ? ($existing_seg['sales'] / $existing_seg['leads']) * 100 : 0;
                 $seg_found = true;
@@ -374,9 +383,9 @@ function build_interactive_data($revenue_data, $segmentations_data, $spend_mappi
             $seg_found = false;
             foreach ($ads[$ad_name_normalized]['segmentations'] as &$existing_seg) {
                 if (normalize_ad_name($existing_seg['name']) === $segmentation_normalized) {
-                    $existing_seg['spend_allocated'] = $spend;
-                    $existing_seg['profit'] = $existing_seg['revenue'] - $spend;
-                    $existing_seg['cpl'] = ($existing_seg['leads'] > 0) ? $spend / $existing_seg['leads'] : 0;
+                    $existing_seg['spend_allocated'] += $spend; // Acumular gasto total
+                    $existing_seg['profit'] = $existing_seg['revenue'] - $existing_seg['spend_allocated'];
+                    $existing_seg['cpl'] = ($existing_seg['leads'] > 0) ? $existing_seg['spend_allocated'] / $existing_seg['leads'] : 0;
                     $seg_found = true;
                     if (DEBUG_MODE) {
                         debug_log("COINCIDENCIA ENCONTRADA - Anuncio: $ad_name_normalized, Segmentación: $segmentation_normalized, Gasto: $spend");
@@ -437,6 +446,8 @@ function build_interactive_data($revenue_data, $segmentations_data, $spend_mappi
     foreach ($ads as $ad_name_normalized => &$ad_data) {
         if ($ad_data['total_spend'] > 0) {
             $ad_data['roas'] = $ad_data['total_revenue'] / $ad_data['total_spend'];
+        } else {
+            $ad_data['roas'] = 0; // Inicializar ROAS cuando no hay gasto
         }
         $ad_data['profit'] = $ad_data['total_revenue'] - $ad_data['total_spend'];
         $total_revenue_all += $ad_data['total_revenue'];
