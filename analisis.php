@@ -26,43 +26,54 @@ define('DB_NAME', 'CAPTACIONES');
 define('DB_PORT', 1296);
 
 // --- FUNCIONES AUXILIARES ---
-function normalize_ad_name($name) {
-    // Verificar que el nombre no esté vacío o sea null
+function clean_display_name($name) {
+    // Función para limpiar nombres para mostrar en la interfaz (sin normalizar case/acentos)
     if (empty($name) || is_null($name)) {
         return '';
     }
     
-    // Convertir a string por si acaso
     $name = (string)$name;
     
     // Limpiar prefijos y sufijos específicos de Meta/Facebook Ads
-    $name = preg_replace('/^\{\{adsutm_content=/', '', $name); // Remover {{adsutm_content=
-    $name = preg_replace('/^\{\{adset\.name\}\}$/', '', $name); // Remover {{adset.name}} completo
-    $name = preg_replace('/^\{\{[^}]*\}\}/', '', $name); // Remover otros patrones {{...}}
-    $name = preg_replace('/\.mp4$/', '', $name); // Remover extensión .mp4
-    $name = preg_replace('/\.mov$/', '', $name); // Remover extensión .mov
-    $name = preg_replace('/\.avi$/', '', $name); // Remover extensión .avi
-    $name = preg_replace('/\.mkv$/', '', $name); // Remover extensión .mkv
-    $name = preg_replace('/\.wmv$/', '', $name); // Remover extensión .wmv
-    $name = preg_replace('/\.(jpg|jpeg|png|gif|webp)$/', '', $name); // Remover extensiones de imagen
+    $name = preg_replace('/^\{\{adsutm_content=/', '', $name);
+    $name = preg_replace('/^\{\{adset\.name\}\}$/', '', $name);
+    $name = preg_replace('/^\{\{[^}]*\}\}/', '', $name);
+    $name = preg_replace('/\.mp4$/', '', $name);
+    $name = preg_replace('/\.mov$/', '', $name);
+    $name = preg_replace('/\.avi$/', '', $name);
+    $name = preg_replace('/\.mkv$/', '', $name);
+    $name = preg_replace('/\.wmv$/', '', $name);
+    $name = preg_replace('/\.(jpg|jpeg|png|gif|webp)$/', '', $name);
     
     // Limpiar caracteres especiales de Meta Ads
     $name = str_replace(['{{', '}}', '='], '', $name);
     
     // Manejar casos especiales
     if (trim($name) === '-' || trim($name) === '' || trim($name) === 'undefined') {
+        return '[Sin nombre]';
+    }
+    
+    return trim($name);
+}
+
+function normalize_ad_name($name) {
+    // Primero limpiar para mostrar
+    $cleaned = clean_display_name($name);
+    
+    // Si está vacío después de limpiar, devolver vacío
+    if (empty($cleaned) || $cleaned === '[Sin nombre]') {
         return '';
     }
     
     // Convertir a minúsculas
-    $normalized = mb_strtolower(trim($name), 'UTF-8');
+    $normalized = mb_strtolower($cleaned, 'UTF-8');
     
     // Quitar tildes y acentos
     $normalized = iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $normalized);
     
     // Si iconv falla, mantener el texto original
     if ($normalized === false) {
-        $normalized = mb_strtolower(trim($name), 'UTF-8');
+        $normalized = mb_strtolower($cleaned, 'UTF-8');
     }
     
     // Quitar caracteres especiales problemáticos, mantener solo letras, números, espacios y guiones
@@ -99,6 +110,7 @@ function get_available_tables() {
 $error_message = '';
 $file_uploaded = false;
 $interactive_data = null;
+$quality_data = null;
 $available_tables = get_available_tables();
 
 // --- LÓGICA PRINCIPAL ---
@@ -136,6 +148,15 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['spend_report'])) {
                 debug_log("Construyendo estructura de datos interactiva...");
                 $interactive_data = build_interactive_data($revenue_data, $segmentations_data, $spend_mapping, $multiply_revenue);
                 debug_log("Estructura de datos creada. Total de anuncios procesados: " . count($interactive_data['ads']));
+                
+                // Obtener datos de calidad de leads para la segunda pestaña
+                debug_log("Obteniendo datos de calidad de leads...");
+                $quality_lead_data = get_quality_lead_data($selected_base_table, $selected_sales_table, $multiply_revenue);
+                if ($quality_lead_data !== null) {
+                    debug_log(count($quality_lead_data) . " registros de calidad de leads encontrados.");
+                    $quality_data = build_quality_analysis($quality_lead_data, $segmentations_data, $spend_mapping, $multiply_revenue);
+                    debug_log("Análisis de calidad completado.");
+                }
                 
                 // Debug: Mostrar una muestra de los datos para verificar cálculos
                 if (DEBUG_MODE && !empty($interactive_data['ads'])) {
@@ -312,6 +333,56 @@ function get_revenue_data($base_table, $sales_table, $multiply_revenue = false) 
     }
 }
 
+function get_quality_lead_data($base_table, $sales_table, $multiply_revenue = false) {
+    global $error_message;
+    $quality_data = [];
+    mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
+    try {
+        $conn = new mysqli(DB_SERVER, DB_USERNAME, DB_PASSWORD, DB_NAME, DB_PORT);
+        $conn->set_charset("utf8mb4");
+        
+        // Sanitizar nombres de tablas para prevenir inyección SQL
+        $base_table = mysqli_real_escape_string($conn, $base_table);
+        $sales_table = mysqli_real_escape_string($conn, $sales_table);
+        
+        // Multiplicar ingresos por 2 si está habilitado (para coproducción 50/50)
+        $revenue_multiplier = $multiply_revenue ? '* 2' : '';
+        
+        $sql = "
+            SELECT
+                l.ANUNCIO,
+                l.SEGMENTACION,
+                l.CAMPAÑA,
+                l.QLEAD,
+                l.INGRESOS,
+                l.ESTUDIOS,
+                l.OCUPACION,
+                l.PROPOSITO,
+                l.PUNTAJE,
+                COUNT(l.`#`) AS total_leads,
+                COUNT(v.cliente_id) AS total_sales,
+                COALESCE(SUM(CAST(REPLACE(v.monto, ',', '.') AS DECIMAL(10, 2))) {$revenue_multiplier}, 0) AS total_revenue
+            FROM `{$base_table}` AS l
+            LEFT JOIN `{$sales_table}` AS v ON l.`#` = v.cliente_id
+            WHERE l.ANUNCIO IS NOT NULL AND l.ANUNCIO != '' AND l.SEGMENTACION IS NOT NULL
+            GROUP BY l.ANUNCIO, l.SEGMENTACION, l.CAMPAÑA, l.QLEAD, l.INGRESOS, l.ESTUDIOS, l.OCUPACION, l.PROPOSITO, l.PUNTAJE;
+        ";
+        $result = $conn->query($sql);
+        while ($row = $result->fetch_assoc()) {
+            // Normalizar el nombre del anuncio y segmentación para la comparación
+            $row['ANUNCIO_NORMALIZED'] = normalize_ad_name($row['ANUNCIO']);
+            $row['SEGMENTACION_NORMALIZED'] = normalize_ad_name($row['SEGMENTACION']);
+            $quality_data[] = $row;
+        }
+        $conn->close();
+        return $quality_data;
+    } catch (mysqli_sql_exception $e) {
+        $error_message = "Error de Base de Datos: " . $e->getMessage();
+        debug_log("FALLO LA CONEXIÓN/CONSULTA: " . $error_message);
+        return null;
+    }
+}
+
 function build_interactive_data($revenue_data, $segmentations_data, $spend_mapping, $multiply_revenue = false) {
     $ads = [];
     $total_revenue_all = 0;
@@ -330,10 +401,10 @@ function build_interactive_data($revenue_data, $segmentations_data, $spend_mappi
 
         // Usar el nombre normalizado como clave para agrupar
         if (!isset($ads[$ad_name_normalized])) {
-            // Decidir qué nombre mostrar: el del CSV si existe, sino el de la BD
+            // Decidir qué nombre mostrar: el del CSV si existe, sino el de la BD (ambos limpios)
             $display_name = isset($spend_mapping[$ad_name_normalized]) 
-                ? $spend_mapping[$ad_name_normalized] 
-                : $ad_name_original;
+                ? clean_display_name($spend_mapping[$ad_name_normalized])
+                : clean_display_name($ad_name_original);
                 
             $ads[$ad_name_normalized] = [
                 'ad_name_display' => $display_name,
@@ -374,12 +445,14 @@ function build_interactive_data($revenue_data, $segmentations_data, $spend_mappi
         // Si no se encontró, crear nueva segmentación
         if (!$seg_found) {
             $ads[$ad_name_normalized]['segmentations'][] = [
-                'name' => $segmentation_original,
+                'name' => clean_display_name($segmentation_original), // Mostrar nombre limpio
                 'campaign_name' => $campaign_name,
                 'revenue' => $revenue,
                 'leads' => $leads,
                 'sales' => $sales,
                 'spend_allocated' => 0, // Se asignará después con datos del CSV
+                'profit' => $revenue, // Profit inicial = revenue (sin gasto aún)
+                'cpl' => 0, // Sin gasto, CPL es 0
                 'conversion_rate' => $leads > 0 ? ($sales / $leads) * 100 : 0
             ];
         }
@@ -420,7 +493,7 @@ function build_interactive_data($revenue_data, $segmentations_data, $spend_mappi
                     debug_log("NO SE ENCONTRÓ SEGMENTACIÓN - Anuncio: $ad_name_normalized, Segmentación: $segmentation_normalized");
                 }
                 $ads[$ad_name_normalized]['segmentations'][] = [
-                    'name' => $segmentation_name,
+                    'name' => clean_display_name($segmentation_name), // Mostrar nombre limpio
                     'campaign_name' => $seg_data['campaign_name'],
                     'revenue' => 0,
                     'leads' => 0,
@@ -435,7 +508,7 @@ function build_interactive_data($revenue_data, $segmentations_data, $spend_mappi
             $ads[$ad_name_normalized]['total_spend'] += $spend;
         } else {
             // Anuncio con gasto pero sin datos de revenue en la BD
-            $display_name = $seg_data['ad_name_original'];
+            $display_name = clean_display_name($seg_data['ad_name_original']);
             
             $ads[$ad_name_normalized] = [
                 'ad_name_display' => $display_name,
@@ -445,7 +518,7 @@ function build_interactive_data($revenue_data, $segmentations_data, $spend_mappi
                 'total_spend' => $spend,
                 'roas' => 0,
                 'segmentations' => [[
-                    'name' => $segmentation_name,
+                    'name' => clean_display_name($segmentation_name), // Mostrar nombre limpio
                     'campaign_name' => $seg_data['campaign_name'],
                     'revenue' => 0,
                     'leads' => 0,
@@ -471,6 +544,18 @@ function build_interactive_data($revenue_data, $segmentations_data, $spend_mappi
         $ad_data['profit'] = $ad_data['total_revenue'] - $ad_data['total_spend'];
         $total_revenue_all += $ad_data['total_revenue'];
         
+        // Recalcular profit para todas las segmentaciones (en caso de que no se haya actualizado)
+        foreach ($ad_data['segmentations'] as &$seg) {
+            if (!isset($seg['profit']) || $seg['profit'] === null) {
+                $seg['profit'] = $seg['revenue'] - ($seg['spend_allocated'] ?? 0);
+            }
+            // Recalcular CPL también
+            if (!isset($seg['cpl']) || $seg['cpl'] === null) {
+                $seg['cpl'] = ($seg['leads'] > 0 && ($seg['spend_allocated'] ?? 0) > 0) ? ($seg['spend_allocated'] ?? 0) / $seg['leads'] : 0;
+            }
+        }
+        unset($seg); // Romper referencia
+        
         // Ordenar segmentaciones por ingresos
         usort($ad_data['segmentations'], function($a, $b) {
             return $b['revenue'] <=> $a['revenue'];
@@ -495,6 +580,142 @@ function build_interactive_data($revenue_data, $segmentations_data, $spend_mappi
             'multiply_revenue' => $multiply_revenue
         ],
         'ads' => $ads
+    ];
+}
+
+function build_quality_analysis($quality_lead_data, $segmentations_data, $spend_mapping, $multiply_revenue = false) {
+    $quality_segments = [];
+    $total_revenue_all = 0;
+    $total_spend_all = 0;
+
+    // Agrupar por categorías de calidad
+    foreach ($quality_lead_data as $row) {
+        $qlead = !empty($row['QLEAD']) ? $row['QLEAD'] : 'Sin Clasificar';
+        $ingresos = !empty($row['INGRESOS']) ? $row['INGRESOS'] : 'No Especificado';
+        $estudios = !empty($row['ESTUDIOS']) ? $row['ESTUDIOS'] : 'No Especificado';
+        $ocupacion = !empty($row['OCUPACION']) ? $row['OCUPACION'] : 'No Especificado';
+        $proposito = !empty($row['PROPOSITO']) ? $row['PROPOSITO'] : 'No Especificado';
+        $puntaje = !empty($row['PUNTAJE']) ? floatval($row['PUNTAJE']) : 0;
+        
+        $ad_name_normalized = $row['ANUNCIO_NORMALIZED'];
+        $segmentation_normalized = $row['SEGMENTACION_NORMALIZED'];
+        $revenue = (float)$row['total_revenue'];
+        $leads = (int)$row['total_leads'];
+        $sales = (int)$row['total_sales'];
+        
+        // Crear clave única para este segmento de calidad
+        $quality_key = $qlead . '|' . $ingresos . '|' . $estudios . '|' . $ocupacion;
+        
+        if (!isset($quality_segments[$quality_key])) {
+            $quality_segments[$quality_key] = [
+                'qlead' => $qlead,
+                'ingresos' => $ingresos,
+                'estudios' => $estudios,
+                'ocupacion' => $ocupacion,
+                'proposito' => $proposito,
+                'avg_puntaje' => 0,
+                'total_leads' => 0,
+                'total_sales' => 0,
+                'total_revenue' => 0,
+                'total_spend' => 0,
+                'roas' => 0,
+                'conversion_rate' => 0,
+                'ads' => []
+            ];
+        }
+        
+        // Acumular métricas
+        $quality_segments[$quality_key]['total_leads'] += $leads;
+        $quality_segments[$quality_key]['total_sales'] += $sales;
+        $quality_segments[$quality_key]['total_revenue'] += $revenue;
+        
+        // Agregar información del anuncio
+        $ad_key = $ad_name_normalized . '|' . $segmentation_normalized;
+        if (!isset($quality_segments[$quality_key]['ads'][$ad_key])) {
+            $quality_segments[$quality_key]['ads'][$ad_key] = [
+                'ad_name' => clean_display_name($row['ANUNCIO']),
+                'segmentation' => clean_display_name($row['SEGMENTACION']),
+                'campaign' => $row['CAMPAÑA'],
+                'leads' => 0,
+                'sales' => 0,
+                'revenue' => 0,
+                'spend' => 0,
+                'puntaje_sum' => 0,
+                'puntaje_count' => 0
+            ];
+        }
+        
+        $quality_segments[$quality_key]['ads'][$ad_key]['leads'] += $leads;
+        $quality_segments[$quality_key]['ads'][$ad_key]['sales'] += $sales;
+        $quality_segments[$quality_key]['ads'][$ad_key]['revenue'] += $revenue;
+        $quality_segments[$quality_key]['ads'][$ad_key]['puntaje_sum'] += $puntaje * $leads;
+        $quality_segments[$quality_key]['ads'][$ad_key]['puntaje_count'] += $leads;
+    }
+    
+    // Asignar gastos desde el CSV y calcular métricas finales
+    foreach ($segmentations_data as $seg_data) {
+        $ad_name_normalized = $seg_data['ad_name_normalized'];
+        $segmentation_normalized = normalize_ad_name($seg_data['segmentation_name']);
+        $spend = $seg_data['spend'];
+        $ad_key = $ad_name_normalized . '|' . $segmentation_normalized;
+        
+        // Distribuir gasto proporcional por cada segmento de calidad
+        foreach ($quality_segments as &$quality_seg) {
+            if (isset($quality_seg['ads'][$ad_key])) {
+                $quality_seg['ads'][$ad_key]['spend'] = $spend;
+                $quality_seg['total_spend'] += $spend;
+                $total_spend_all += $spend;
+            }
+        }
+        unset($quality_seg);
+    }
+    
+    // Calcular métricas finales para cada segmento
+    foreach ($quality_segments as $key => &$segment) {
+        $segment['conversion_rate'] = $segment['total_leads'] > 0 ? ($segment['total_sales'] / $segment['total_leads']) * 100 : 0;
+        $segment['roas'] = $segment['total_spend'] > 0 ? $segment['total_revenue'] / $segment['total_spend'] : 0;
+        $segment['profit'] = $segment['total_revenue'] - $segment['total_spend'];
+        $segment['cpl'] = $segment['total_leads'] > 0 && $segment['total_spend'] > 0 ? $segment['total_spend'] / $segment['total_leads'] : 0;
+        
+        // Calcular puntaje promedio ponderado
+        $total_puntaje_sum = 0;
+        $total_puntaje_count = 0;
+        foreach ($segment['ads'] as &$ad) {
+            if ($ad['puntaje_count'] > 0) {
+                $ad['avg_puntaje'] = $ad['puntaje_sum'] / $ad['puntaje_count'];
+                $total_puntaje_sum += $ad['puntaje_sum'];
+                $total_puntaje_count += $ad['puntaje_count'];
+            } else {
+                $ad['avg_puntaje'] = 0;
+            }
+        }
+        unset($ad);
+        
+        $segment['avg_puntaje'] = $total_puntaje_count > 0 ? $total_puntaje_sum / $total_puntaje_count : 0;
+        $total_revenue_all += $segment['total_revenue'];
+        
+        // Ordenar anuncios por profit
+        uasort($segment['ads'], function($a, $b) {
+            return ($b['revenue'] - $b['spend']) - ($a['revenue'] - $a['spend']);
+        });
+    }
+    unset($segment);
+    
+    // Ordenar segmentos por ROAS
+    uasort($quality_segments, function($a, $b) {
+        return $b['roas'] - $a['roas'];
+    });
+    
+    $total_roas_all = ($total_spend_all > 0) ? $total_revenue_all / $total_spend_all : 0;
+    
+    return [
+        'summary' => [
+            'total_revenue' => $total_revenue_all,
+            'total_spend' => $total_spend_all,
+            'total_roas' => $total_roas_all,
+            'multiply_revenue' => $multiply_revenue
+        ],
+        'segments' => $quality_segments
     ];
 }
 
@@ -654,6 +875,22 @@ if (DEBUG_MODE) {
 
         <?php if ($file_uploaded && !$error_message && $interactive_data): ?>
         
+        <!-- Navegación por pestañas -->
+        <div class="mb-6">
+            <div class="border-b border-gray-200">
+                <nav class="-mb-px flex space-x-8">
+                    <button id="tab-general" class="tab-button active border-b-2 border-indigo-500 py-4 px-1 text-sm font-medium text-indigo-600">
+                        📊 Análisis General
+                    </button>
+                    <?php if ($quality_data): ?>
+                    <button id="tab-quality" class="tab-button border-b-2 border-transparent py-4 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 hover:border-gray-300">
+                        🎯 Análisis por Calidad de Leads
+                    </button>
+                    <?php endif; ?>
+                </nav>
+            </div>
+        </div>
+        
         <!-- Información del Proyecto Analizado -->
         <div class="mb-6">
             <div class="card p-4 bg-blue-50 border-l-4 border-blue-500">
@@ -754,10 +991,12 @@ if (DEBUG_MODE) {
             </div>
         </div>
 
-        <div class="flex flex-col lg:flex-row gap-6">
-            <!-- Columna Izquierda: Lista Dinámica -->
-            <aside class="lg:w-2/5 xl:w-1/3">
-                <div class="card p-4">
+        <!-- Contenido General -->
+        <div id="content-general" class="tab-content">
+            <div class="flex flex-col lg:flex-row gap-6">
+                <!-- Columna Izquierda: Lista Dinámica -->
+                <aside class="lg:w-2/5 xl:w-1/3">
+                    <div class="card p-4">
                     <div class="flex justify-between items-center mb-3">
                         <h2 class="text-lg font-bold" id="main-table-title">Análisis por Anuncio</h2>
                         <div class="flex items-center gap-2">
@@ -811,6 +1050,150 @@ if (DEBUG_MODE) {
                     </div>
                 </div>
             </main>
+            </div>
+        </div>
+
+        <!-- Contenido de Calidad de Leads -->
+        <?php if ($quality_data): ?>
+        <div id="content-quality" class="tab-content hidden">
+            <div class="space-y-6">
+                <!-- Resumen de Calidad -->
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div class="card p-4 text-center bg-gradient-to-r from-purple-50 to-pink-50">
+                        <h4 class="text-sm font-medium text-purple-700">Segmentos de Calidad</h4>
+                        <p class="text-2xl font-bold text-purple-600"><?php echo count($quality_data['segments']); ?></p>
+                    </div>
+                    <div class="card p-4 text-center bg-gradient-to-r from-green-50 to-blue-50">
+                        <h4 class="text-sm font-medium text-green-700">Ingresos Totales</h4>
+                        <p class="text-2xl font-bold text-green-600"><?php echo number_format($quality_data['summary']['total_revenue'], 2); ?>$</p>
+                    </div>
+                    <div class="card p-4 text-center bg-gradient-to-r from-yellow-50 to-orange-50">
+                        <h4 class="text-sm font-medium text-yellow-700">ROAS Promedio</h4>
+                        <p class="text-2xl font-bold text-yellow-600"><?php echo number_format($quality_data['summary']['total_roas'], 2); ?>x</p>
+                    </div>
+                    <div class="card p-4 text-center bg-gradient-to-r from-indigo-50 to-purple-50">
+                        <h4 class="text-sm font-medium text-indigo-700">Gasto Total</h4>
+                        <p class="text-2xl font-bold text-indigo-600"><?php echo number_format($quality_data['summary']['total_spend'], 2); ?>$</p>
+                    </div>
+                </div>
+
+                <!-- Filtros para análisis de calidad -->
+                <div class="card p-4 bg-gray-50">
+                    <h3 class="text-lg font-semibold mb-3">🔍 Filtros de Análisis</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Por Calidad (QLEAD)</label>
+                            <select id="filter-qlead" class="w-full text-sm border border-gray-300 rounded px-3 py-2">
+                                <option value="">Todos</option>
+                                <?php
+                                $qleads = array_unique(array_column($quality_data['segments'], 'qlead'));
+                                foreach ($qleads as $qlead): ?>
+                                    <option value="<?php echo htmlspecialchars($qlead); ?>"><?php echo htmlspecialchars($qlead); ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Por Ingresos</label>
+                            <select id="filter-ingresos" class="w-full text-sm border border-gray-300 rounded px-3 py-2">
+                                <option value="">Todos</option>
+                                <?php
+                                $ingresos_list = array_unique(array_column($quality_data['segments'], 'ingresos'));
+                                foreach ($ingresos_list as $ingresos): ?>
+                                    <option value="<?php echo htmlspecialchars($ingresos); ?>"><?php echo htmlspecialchars($ingresos); ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Por Estudios</label>
+                            <select id="filter-estudios" class="w-full text-sm border border-gray-300 rounded px-3 py-2">
+                                <option value="">Todos</option>
+                                <?php
+                                $estudios_list = array_unique(array_column($quality_data['segments'], 'estudios'));
+                                foreach ($estudios_list as $estudios): ?>
+                                    <option value="<?php echo htmlspecialchars($estudios); ?>"><?php echo htmlspecialchars($estudios); ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Por Ocupación</label>
+                            <select id="filter-ocupacion" class="w-full text-sm border border-gray-300 rounded px-3 py-2">
+                                <option value="">Todos</option>
+                                <?php
+                                $ocupaciones = array_unique(array_column($quality_data['segments'], 'ocupacion'));
+                                foreach ($ocupaciones as $ocupacion): ?>
+                                    <option value="<?php echo htmlspecialchars($ocupacion); ?>"><?php echo htmlspecialchars($ocupacion); ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tabla de segmentos de calidad -->
+                <div class="card p-6">
+                    <h3 class="text-xl font-semibold mb-4">📈 Análisis por Segmentos de Calidad</h3>
+                    <div class="overflow-x-auto">
+                        <table id="quality-table" class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Calidad Lead</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ingresos</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estudios</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ocupación</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Leads</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ventas</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Conv. %</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ROAS</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ingresos</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Gasto</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Profit</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Puntaje Prom.</th>
+                                </tr>
+                            </thead>
+                            <tbody id="quality-tbody" class="bg-white divide-y divide-gray-200">
+                                <?php foreach ($quality_data['segments'] as $segment): ?>
+                                <tr class="quality-row hover:bg-gray-50" 
+                                    data-qlead="<?php echo htmlspecialchars($segment['qlead']); ?>"
+                                    data-ingresos="<?php echo htmlspecialchars($segment['ingresos']); ?>"
+                                    data-estudios="<?php echo htmlspecialchars($segment['estudios']); ?>"
+                                    data-ocupacion="<?php echo htmlspecialchars($segment['ocupacion']); ?>">
+                                    
+                                    <td class="px-4 py-4 text-sm font-medium text-gray-900">
+                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium 
+                                            <?php echo $segment['qlead'] == 'Caliente' ? 'bg-red-100 text-red-800' : 
+                                                     ($segment['qlead'] == 'Tibio' ? 'bg-yellow-100 text-yellow-800' : 
+                                                     ($segment['qlead'] == 'Frio' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800')); ?>">
+                                            <?php echo htmlspecialchars($segment['qlead']); ?>
+                                        </span>
+                                    </td>
+                                    <td class="px-4 py-4 text-sm text-gray-900"><?php echo htmlspecialchars($segment['ingresos']); ?></td>
+                                    <td class="px-4 py-4 text-sm text-gray-900"><?php echo htmlspecialchars($segment['estudios']); ?></td>
+                                    <td class="px-4 py-4 text-sm text-gray-900"><?php echo htmlspecialchars($segment['ocupacion']); ?></td>
+                                    <td class="px-4 py-4 text-sm font-semibold text-blue-600"><?php echo number_format($segment['total_leads']); ?></td>
+                                    <td class="px-4 py-4 text-sm font-semibold text-purple-600"><?php echo number_format($segment['total_sales']); ?></td>
+                                    <td class="px-4 py-4 text-sm font-semibold <?php echo $segment['conversion_rate'] >= 5 ? 'text-green-600' : ($segment['conversion_rate'] >= 2 ? 'text-yellow-600' : 'text-red-600'); ?>">
+                                        <?php echo number_format($segment['conversion_rate'], 2); ?>%
+                                    </td>
+                                    <td class="px-4 py-4 text-sm font-bold <?php echo $segment['roas'] >= 2 ? 'text-green-600' : ($segment['roas'] >= 1 ? 'text-yellow-600' : 'text-red-600'); ?>">
+                                        <?php echo number_format($segment['roas'], 2); ?>x
+                                    </td>
+                                    <td class="px-4 py-4 text-sm font-semibold text-green-600">$<?php echo number_format($segment['total_revenue'], 2); ?></td>
+                                    <td class="px-4 py-4 text-sm font-semibold text-red-600">$<?php echo number_format($segment['total_spend'], 2); ?></td>
+                                    <td class="px-4 py-4 text-sm font-bold <?php echo $segment['profit'] >= 0 ? 'text-green-600' : 'text-red-600'; ?>">
+                                        $<?php echo number_format($segment['profit'], 2); ?>
+                                    </td>
+                                    <td class="px-4 py-4 text-sm font-medium text-indigo-600">
+                                        <?php echo number_format($segment['avg_puntaje'], 1); ?>
+                                    </td>
+                                </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <?php endif; ?>
+        
         </div>
         <?php endif; ?>
     </div>
@@ -819,6 +1202,7 @@ if (DEBUG_MODE) {
 document.addEventListener('DOMContentLoaded', function() {
     // Incrustar los datos de PHP en JavaScript
     const analysisData = <?php echo json_encode($interactive_data); ?>;
+    const qualityData = <?php echo json_encode($quality_data); ?>;
 
     if (!analysisData || !analysisData.ads) {
         console.log("No hay datos de análisis para mostrar.");
@@ -1447,6 +1831,90 @@ document.addEventListener('DOMContentLoaded', function() {
     // Inicializar con todos los anuncios seleccionados
     adsArray.forEach(ad => selectedKeys.add(ad.key));
     updateUIForSelection();
+
+    // === FUNCIONALIDAD DE PESTAÑAS ===
+    const tabButtons = document.querySelectorAll('.tab-button');
+    const tabContents = document.querySelectorAll('.tab-content');
+
+    tabButtons.forEach(button => {
+        button.addEventListener('click', function() {
+            const targetTab = this.id.replace('tab-', '');
+            
+            // Actualizar botones
+            tabButtons.forEach(btn => {
+                btn.classList.remove('active', 'border-indigo-500', 'text-indigo-600');
+                btn.classList.add('border-transparent', 'text-gray-500');
+            });
+            
+            this.classList.add('active', 'border-indigo-500', 'text-indigo-600');
+            this.classList.remove('border-transparent', 'text-gray-500');
+            
+            // Mostrar/ocultar contenido
+            tabContents.forEach(content => {
+                content.classList.add('hidden');
+            });
+            
+            document.getElementById(`content-${targetTab}`).classList.remove('hidden');
+        });
+    });
+
+    // === FUNCIONALIDAD DE FILTROS PARA CALIDAD ===
+    if (qualityData && qualityData.segments) {
+        const filterElements = {
+            qlead: document.getElementById('filter-qlead'),
+            ingresos: document.getElementById('filter-ingresos'),
+            estudios: document.getElementById('filter-estudios'),
+            ocupacion: document.getElementById('filter-ocupacion')
+        };
+
+        function applyQualityFilters() {
+            const filters = {
+                qlead: filterElements.qlead?.value || '',
+                ingresos: filterElements.ingresos?.value || '',
+                estudios: filterElements.estudios?.value || '',
+                ocupacion: filterElements.ocupacion?.value || ''
+            };
+
+            const rows = document.querySelectorAll('.quality-row');
+            rows.forEach(row => {
+                let shouldShow = true;
+                
+                Object.keys(filters).forEach(filterType => {
+                    if (filters[filterType] && row.dataset[filterType] !== filters[filterType]) {
+                        shouldShow = false;
+                    }
+                });
+                
+                if (shouldShow) {
+                    row.style.display = '';
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+
+            // Actualizar contadores
+            const visibleRows = document.querySelectorAll('.quality-row:not([style*="display: none"])');
+            let totalLeads = 0, totalSales = 0, totalRevenue = 0, totalSpend = 0;
+            
+            visibleRows.forEach(row => {
+                const cells = row.querySelectorAll('td');
+                totalLeads += parseFloat(cells[4].textContent.replace(/,/g, '')) || 0;
+                totalSales += parseFloat(cells[5].textContent.replace(/,/g, '')) || 0;
+                totalRevenue += parseFloat(cells[8].textContent.replace(/[\$,]/g, '')) || 0;
+                totalSpend += parseFloat(cells[9].textContent.replace(/[\$,]/g, '')) || 0;
+            });
+
+            // Actualizar tarjetas de resumen (si es necesario)
+            console.log(`Filtros aplicados: ${visibleRows.length} segmentos visibles`);
+        }
+
+        // Añadir event listeners a los filtros
+        Object.values(filterElements).forEach(element => {
+            if (element) {
+                element.addEventListener('change', applyQualityFilters);
+            }
+        });
+    }
 });
 </script>
 
