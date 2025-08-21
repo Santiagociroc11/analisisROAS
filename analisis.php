@@ -35,6 +35,25 @@ function normalize_ad_name($name) {
     // Convertir a string por si acaso
     $name = (string)$name;
     
+    // Limpiar prefijos y sufijos específicos de Meta/Facebook Ads
+    $name = preg_replace('/^\{\{adsutm_content=/', '', $name); // Remover {{adsutm_content=
+    $name = preg_replace('/^\{\{adset\.name\}\}$/', '', $name); // Remover {{adset.name}} completo
+    $name = preg_replace('/^\{\{[^}]*\}\}/', '', $name); // Remover otros patrones {{...}}
+    $name = preg_replace('/\.mp4$/', '', $name); // Remover extensión .mp4
+    $name = preg_replace('/\.mov$/', '', $name); // Remover extensión .mov
+    $name = preg_replace('/\.avi$/', '', $name); // Remover extensión .avi
+    $name = preg_replace('/\.mkv$/', '', $name); // Remover extensión .mkv
+    $name = preg_replace('/\.wmv$/', '', $name); // Remover extensión .wmv
+    $name = preg_replace('/\.(jpg|jpeg|png|gif|webp)$/', '', $name); // Remover extensiones de imagen
+    
+    // Limpiar caracteres especiales de Meta Ads
+    $name = str_replace(['{{', '}}', '='], '', $name);
+    
+    // Manejar casos especiales
+    if (trim($name) === '-' || trim($name) === '' || trim($name) === 'undefined') {
+        return '';
+    }
+    
     // Convertir a minúsculas
     $normalized = mb_strtolower(trim($name), 'UTF-8');
     
