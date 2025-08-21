@@ -652,19 +652,31 @@ function build_quality_analysis($quality_lead_data, $segmentations_data, $spend_
         $quality_segments[$quality_key]['ads'][$ad_key]['puntaje_count'] += $leads;
     }
     
-    // Asignar gastos desde el CSV y calcular métricas finales
+    // Calcular distribución proporcional de gastos
+    $ad_spend_distribution = [];
     foreach ($segmentations_data as $seg_data) {
         $ad_name_normalized = $seg_data['ad_name_normalized'];
         $segmentation_normalized = normalize_ad_name($seg_data['segmentation_name']);
         $spend = $seg_data['spend'];
         $ad_key = $ad_name_normalized . '|' . $segmentation_normalized;
         
-        // Distribuir gasto proporcional por cada segmento de calidad
-        foreach ($quality_segments as &$quality_seg) {
+        // Calcular total de leads por anuncio/segmentación para distribución proporcional
+        $total_leads_for_ad = 0;
+        foreach ($quality_segments as $quality_seg) {
             if (isset($quality_seg['ads'][$ad_key])) {
-                $quality_seg['ads'][$ad_key]['spend'] = $spend;
-                $quality_seg['total_spend'] += $spend;
-                $total_spend_all += $spend;
+                $total_leads_for_ad += $quality_seg['ads'][$ad_key]['leads'];
+            }
+        }
+        
+        // Distribuir gasto proporcional basado en leads por cada segmento de calidad
+        foreach ($quality_segments as &$quality_seg) {
+            if (isset($quality_seg['ads'][$ad_key]) && $total_leads_for_ad > 0) {
+                $proportion = $quality_seg['ads'][$ad_key]['leads'] / $total_leads_for_ad;
+                $proportional_spend = $spend * $proportion;
+                
+                $quality_seg['ads'][$ad_key]['spend'] = $proportional_spend;
+                $quality_seg['total_spend'] += $proportional_spend;
+                $total_spend_all += $proportional_spend;
             }
         }
         unset($quality_seg);
