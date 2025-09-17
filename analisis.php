@@ -1423,11 +1423,31 @@ if (DEBUG_MODE) {
                                 <table class="w-full text-sm">
                                     <thead class="bg-green-50">
                                         <tr>
-                                            <th class="px-3 py-2 text-left font-medium text-green-700">Estudios</th>
-                                            <th class="px-3 py-2 text-center font-medium text-green-700">Leads</th>
-                                            <th class="px-3 py-2 text-center font-medium text-green-700">Conv%</th>
-                                            <th class="px-3 py-2 text-center font-medium text-green-700">ROAS</th>
-                                            <th class="px-3 py-2 text-center font-medium text-green-700">Profit</th>
+                                            <th class="px-3 py-2 text-left font-medium text-green-700 cursor-pointer hover:bg-green-100 sortable" 
+                                                onclick="sortQualityTable('estudios', 'name')" 
+                                                data-sort="name">
+                                                Estudios <span class="sort-indicator text-xs">↕️</span>
+                                            </th>
+                                            <th class="px-3 py-2 text-center font-medium text-green-700 cursor-pointer hover:bg-green-100 sortable" 
+                                                onclick="sortQualityTable('estudios', 'leads')" 
+                                                data-sort="leads">
+                                                Leads <span class="sort-indicator text-xs">↕️</span>
+                                            </th>
+                                            <th class="px-3 py-2 text-center font-medium text-green-700 cursor-pointer hover:bg-green-100 sortable" 
+                                                onclick="sortQualityTable('estudios', 'conversion')" 
+                                                data-sort="conversion">
+                                                Conv% <span class="sort-indicator text-xs">↕️</span>
+                                            </th>
+                                            <th class="px-3 py-2 text-center font-medium text-green-700 cursor-pointer hover:bg-green-100 sortable" 
+                                                onclick="sortQualityTable('estudios', 'roas')" 
+                                                data-sort="roas">
+                                                ROAS <span class="sort-indicator text-xs">↕️</span>
+                                            </th>
+                                            <th class="px-3 py-2 text-center font-medium text-green-700 cursor-pointer hover:bg-green-100 sortable" 
+                                                onclick="sortQualityTable('estudios', 'profit')" 
+                                                data-sort="profit">
+                                                Profit <span class="sort-indicator text-xs">↕️</span>
+                                            </th>
                                         </tr>
                                     </thead>
                                     <tbody id="estudios-tbody" class="divide-y divide-green-100">
@@ -1480,11 +1500,31 @@ if (DEBUG_MODE) {
                                 <table class="w-full text-sm">
                                     <thead class="bg-blue-50">
                                         <tr>
-                                            <th class="px-3 py-2 text-left font-medium text-blue-700">Ingresos</th>
-                                            <th class="px-3 py-2 text-center font-medium text-blue-700">Leads</th>
-                                            <th class="px-3 py-2 text-center font-medium text-blue-700">Conv%</th>
-                                            <th class="px-3 py-2 text-center font-medium text-blue-700">ROAS</th>
-                                            <th class="px-3 py-2 text-center font-medium text-blue-700">Profit</th>
+                                            <th class="px-3 py-2 text-left font-medium text-blue-700 cursor-pointer hover:bg-blue-100 sortable" 
+                                                onclick="sortQualityTable('ingresos', 'name')" 
+                                                data-sort="name">
+                                                Ingresos <span class="sort-indicator text-xs">↕️</span>
+                                            </th>
+                                            <th class="px-3 py-2 text-center font-medium text-blue-700 cursor-pointer hover:bg-blue-100 sortable" 
+                                                onclick="sortQualityTable('ingresos', 'leads')" 
+                                                data-sort="leads">
+                                                Leads <span class="sort-indicator text-xs">↕️</span>
+                                            </th>
+                                            <th class="px-3 py-2 text-center font-medium text-blue-700 cursor-pointer hover:bg-blue-100 sortable" 
+                                                onclick="sortQualityTable('ingresos', 'conversion')" 
+                                                data-sort="conversion">
+                                                Conv% <span class="sort-indicator text-xs">↕️</span>
+                                            </th>
+                                            <th class="px-3 py-2 text-center font-medium text-blue-700 cursor-pointer hover:bg-blue-100 sortable" 
+                                                onclick="sortQualityTable('ingresos', 'roas')" 
+                                                data-sort="roas">
+                                                ROAS <span class="sort-indicator text-xs">↕️</span>
+                                            </th>
+                                            <th class="px-3 py-2 text-center font-medium text-blue-700 cursor-pointer hover:bg-blue-100 sortable" 
+                                                onclick="sortQualityTable('ingresos', 'profit')" 
+                                                data-sort="profit">
+                                                Profit <span class="sort-indicator text-xs">↕️</span>
+                                            </th>
                                         </tr>
                                     </thead>
                                     <tbody id="ingresos-tbody" class="divide-y divide-blue-100">
@@ -1537,11 +1577,31 @@ if (DEBUG_MODE) {
                                 <table class="w-full text-sm">
                                     <thead class="bg-purple-50">
                                         <tr>
-                                            <th class="px-3 py-2 text-left font-medium text-purple-700">Ocupación</th>
-                                            <th class="px-3 py-2 text-center font-medium text-purple-700">Leads</th>
-                                            <th class="px-3 py-2 text-center font-medium text-purple-700">Conv%</th>
-                                            <th class="px-3 py-2 text-center font-medium text-purple-700">ROAS</th>
-                                            <th class="px-3 py-2 text-center font-medium text-purple-700">Profit</th>
+                                            <th class="px-3 py-2 text-left font-medium text-purple-700 cursor-pointer hover:bg-purple-100 sortable" 
+                                                onclick="sortQualityTable('ocupacion', 'name')" 
+                                                data-sort="name">
+                                                Ocupación <span class="sort-indicator text-xs">↕️</span>
+                                            </th>
+                                            <th class="px-3 py-2 text-center font-medium text-purple-700 cursor-pointer hover:bg-purple-100 sortable" 
+                                                onclick="sortQualityTable('ocupacion', 'leads')" 
+                                                data-sort="leads">
+                                                Leads <span class="sort-indicator text-xs">↕️</span>
+                                            </th>
+                                            <th class="px-3 py-2 text-center font-medium text-purple-700 cursor-pointer hover:bg-purple-100 sortable" 
+                                                onclick="sortQualityTable('ocupacion', 'conversion')" 
+                                                data-sort="conversion">
+                                                Conv% <span class="sort-indicator text-xs">↕️</span>
+                                            </th>
+                                            <th class="px-3 py-2 text-center font-medium text-purple-700 cursor-pointer hover:bg-purple-100 sortable" 
+                                                onclick="sortQualityTable('ocupacion', 'roas')" 
+                                                data-sort="roas">
+                                                ROAS <span class="sort-indicator text-xs">↕️</span>
+                                            </th>
+                                            <th class="px-3 py-2 text-center font-medium text-purple-700 cursor-pointer hover:bg-purple-100 sortable" 
+                                                onclick="sortQualityTable('ocupacion', 'profit')" 
+                                                data-sort="profit">
+                                                Profit <span class="sort-indicator text-xs">↕️</span>
+                                            </th>
                                         </tr>
                                     </thead>
                                     <tbody id="ocupacion-tbody" class="divide-y divide-purple-100">
@@ -1594,11 +1654,31 @@ if (DEBUG_MODE) {
                                 <table class="w-full text-sm">
                                     <thead class="bg-orange-50">
                                         <tr>
-                                            <th class="px-3 py-2 text-left font-medium text-orange-700">Edad</th>
-                                            <th class="px-3 py-2 text-center font-medium text-orange-700">Leads</th>
-                                            <th class="px-3 py-2 text-center font-medium text-orange-700">Conv%</th>
-                                            <th class="px-3 py-2 text-center font-medium text-orange-700">ROAS</th>
-                                            <th class="px-3 py-2 text-center font-medium text-orange-700">Profit</th>
+                                            <th class="px-3 py-2 text-left font-medium text-orange-700 cursor-pointer hover:bg-orange-100 sortable" 
+                                                onclick="sortQualityTable('edad_especifica', 'name')" 
+                                                data-sort="name">
+                                                Edad <span class="sort-indicator text-xs">↕️</span>
+                                            </th>
+                                            <th class="px-3 py-2 text-center font-medium text-orange-700 cursor-pointer hover:bg-orange-100 sortable" 
+                                                onclick="sortQualityTable('edad_especifica', 'leads')" 
+                                                data-sort="leads">
+                                                Leads <span class="sort-indicator text-xs">↕️</span>
+                                            </th>
+                                            <th class="px-3 py-2 text-center font-medium text-orange-700 cursor-pointer hover:bg-orange-100 sortable" 
+                                                onclick="sortQualityTable('edad_especifica', 'conversion')" 
+                                                data-sort="conversion">
+                                                Conv% <span class="sort-indicator text-xs">↕️</span>
+                                            </th>
+                                            <th class="px-3 py-2 text-center font-medium text-orange-700 cursor-pointer hover:bg-orange-100 sortable" 
+                                                onclick="sortQualityTable('edad_especifica', 'roas')" 
+                                                data-sort="roas">
+                                                ROAS <span class="sort-indicator text-xs">↕️</span>
+                                            </th>
+                                            <th class="px-3 py-2 text-center font-medium text-orange-700 cursor-pointer hover:bg-orange-100 sortable" 
+                                                onclick="sortQualityTable('edad_especifica', 'profit')" 
+                                                data-sort="profit">
+                                                Profit <span class="sort-indicator text-xs">↕️</span>
+                                            </th>
                                         </tr>
                                     </thead>
                                     <tbody id="edad-tbody" class="divide-y divide-orange-100">
@@ -2570,14 +2650,16 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // === FUNCIONALIDAD INTERACTIVA DE TABLAS DE CALIDAD ===
-    if (qualityData && qualityData.segments) {
+    if (qualityData && qualityData.segments && Object.keys(qualityData.segments).length > 0) {
         let activeFilters = {};
         
         // Función global para toggle de selección
-        window.toggleSelection = function(category, value) {
-            console.log('toggleSelection called:', category, value);
-            console.log('qualityData available:', !!qualityData);
-            console.log('qualityData.segments length:', qualityData?.segments?.length);
+                window.toggleSelection = function(category, value) {
+                    console.log('toggleSelection called:', category, value);
+                    console.log('qualityData available:', !!qualityData);
+                    console.log('qualityData structure:', qualityData);
+                    console.log('qualityData.segments exists:', !!qualityData?.segments);
+                    console.log('qualityData.segments length:', Array.isArray(qualityData?.segments) ? qualityData.segments.length : 'Not an array');
             
             // Toggle del filtro
             if (activeFilters[category] && activeFilters[category] === value) {
@@ -2657,7 +2739,14 @@ document.addEventListener('DOMContentLoaded', function() {
             selectionInfo.innerHTML = `Filtros activos: ${filterTexts.join(' • ')}`;
             
             // Calcular métricas combinadas
-            const filteredSegments = qualityData.segments.filter(segment => {
+            // Convertir object a array si es necesario
+            const segmentsArray = Array.isArray(qualityData.segments) 
+                ? qualityData.segments 
+                : Object.values(qualityData.segments);
+                
+            console.log('segmentsArray:', segmentsArray);
+            
+            const filteredSegments = segmentsArray.filter(segment => {
                 return Object.entries(activeFilters).every(([category, value]) => {
                     const match = segment[category] === value;
                     console.log(`Checking ${category}: ${segment[category]} === ${value} = ${match}`);
@@ -2723,6 +2812,123 @@ document.addEventListener('DOMContentLoaded', function() {
             updateTableSelections();
             updateCombinedMetrics();
         });
+    }
+
+    // === FUNCIONALIDAD DE ORDENAMIENTO PARA TABLAS DE CALIDAD ===
+    let qualityTableSorts = {
+        estudios: { column: null, direction: 'desc' },
+        ingresos: { column: null, direction: 'desc' },
+        ocupacion: { column: null, direction: 'desc' },
+        edad_especifica: { column: null, direction: 'desc' }
+    };
+
+    window.sortQualityTable = function(tableType, column) {
+        console.log('Sorting quality table:', tableType, 'by', column);
+        
+        const tableBodyId = tableType === 'edad_especifica' ? 'edad-tbody' : tableType + '-tbody';
+        const tbody = document.getElementById(tableBodyId);
+        
+        if (!tbody) {
+            console.error('Table body not found:', tableBodyId);
+            return;
+        }
+        
+        const rows = Array.from(tbody.querySelectorAll('tr'));
+        
+        // Determinar dirección de ordenamiento
+        const currentSort = qualityTableSorts[tableType];
+        if (currentSort.column === column) {
+            currentSort.direction = currentSort.direction === 'desc' ? 'asc' : 'desc';
+        } else {
+            currentSort.column = column;
+            currentSort.direction = 'desc'; // Por defecto descendente para números
+        }
+        
+        // Actualizar indicadores visuales
+        updateQualitySortIndicators(tableType, column, currentSort.direction);
+        
+        // Función para extraer valor numérico
+        function getNumericValue(text) {
+            if (!text) return 0;
+            // Remover símbolos y convertir a número
+            const cleaned = text.replace(/[\$,%]/g, '');
+            return parseFloat(cleaned) || 0;
+        }
+        
+        // Función para obtener valor de celda según columna
+        function getCellValue(row, columnType) {
+            const cells = row.querySelectorAll('td');
+            switch (columnType) {
+                case 'name':
+                    return cells[0]?.textContent?.trim() || '';
+                case 'leads':
+                    return getNumericValue(cells[1]?.textContent);
+                case 'conversion':
+                    return getNumericValue(cells[2]?.textContent);
+                case 'roas':
+                    return getNumericValue(cells[3]?.textContent);
+                case 'profit':
+                    return getNumericValue(cells[4]?.textContent);
+                default:
+                    return '';
+            }
+        }
+        
+        // Ordenar filas
+        rows.sort((a, b) => {
+            const aValue = getCellValue(a, column);
+            const bValue = getCellValue(b, column);
+            
+            let comparison = 0;
+            if (column === 'name') {
+                // Ordenamiento alfabético para nombres
+                comparison = aValue.localeCompare(bValue);
+            } else {
+                // Ordenamiento numérico para métricas
+                comparison = aValue - bValue;
+            }
+            
+            return currentSort.direction === 'desc' ? -comparison : comparison;
+        });
+        
+        // Reordenar DOM
+        rows.forEach(row => tbody.appendChild(row));
+        
+        console.log(`Table ${tableType} sorted by ${column} (${currentSort.direction})`);
+    };
+    
+    function updateQualitySortIndicators(tableType, activeColumn, direction) {
+        // Mapear tipos de tabla a prefijos de color
+        const colorMap = {
+            estudios: 'green',
+            ingresos: 'blue', 
+            ocupacion: 'purple',
+            edad_especifica: 'orange'
+        };
+        
+        const color = colorMap[tableType];
+        
+        // Limpiar todos los indicadores de esta tabla
+        const tableHeaders = document.querySelectorAll(`thead.bg-${color}-50 th.sortable`);
+        tableHeaders.forEach(header => {
+            const indicator = header.querySelector('.sort-indicator');
+            if (indicator) {
+                indicator.textContent = '↕️';
+                header.classList.remove(`bg-${color}-200`);
+            }
+        });
+        
+        // Actualizar indicador activo
+        const activeHeader = document.querySelector(
+            `thead.bg-${color}-50 th.sortable[data-sort="${activeColumn}"]`
+        );
+        if (activeHeader) {
+            const indicator = activeHeader.querySelector('.sort-indicator');
+            if (indicator) {
+                indicator.textContent = direction === 'desc' ? '↓' : '↑';
+                activeHeader.classList.add(`bg-${color}-200`);
+            }
+        }
     }
 });
 </script>
