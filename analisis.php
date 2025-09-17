@@ -1405,7 +1405,7 @@ if (DEBUG_MODE) {
                     <div id="selected-metrics" class="hidden bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-lg border border-blue-200">
                         <h4 class="text-lg font-semibold text-blue-800 mb-4">📈 Métricas de Selección Combinada</h4>
                         <div id="selection-info" class="mb-4 text-sm text-blue-700"></div>
-                        <div id="metrics-cards" class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div id="metrics-cards" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-4">
                             <!-- Métricas se generarán dinámicamente -->
                         </div>
                         <button id="clear-selection" class="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors">
@@ -1432,6 +1432,11 @@ if (DEBUG_MODE) {
                                                 onclick="sortQualityTable('estudios', 'leads')" 
                                                 data-sort="leads">
                                                 Leads <span class="sort-indicator text-xs">↕️</span>
+                                            </th>
+                                            <th class="px-3 py-2 text-center font-medium text-green-700 cursor-pointer hover:bg-green-100 sortable" 
+                                                onclick="sortQualityTable('estudios', 'spend')" 
+                                                data-sort="spend">
+                                                Gasto <span class="sort-indicator text-xs">↕️</span>
                                             </th>
                                             <th class="px-3 py-2 text-center font-medium text-green-700 cursor-pointer hover:bg-green-100 sortable" 
                                                 onclick="sortQualityTable('estudios', 'conversion')" 
@@ -1477,6 +1482,7 @@ if (DEBUG_MODE) {
                                             onclick="toggleSelection('estudios', '<?php echo htmlspecialchars($estudios); ?>')">
                                             <td class="px-3 py-2 font-medium"><?php echo htmlspecialchars($estudios); ?></td>
                                             <td class="px-3 py-2 text-center text-blue-600"><?php echo number_format($data['leads']); ?></td>
+                                            <td class="px-3 py-2 text-center text-purple-600">$<?php echo number_format($data['spend'], 2); ?></td>
                                             <td class="px-3 py-2 text-center <?php echo $conv_rate >= 5 ? 'text-green-600' : ($conv_rate >= 2 ? 'text-yellow-600' : 'text-red-600'); ?>">
                                                 <?php echo number_format($conv_rate, 1); ?>%
                                             </td>
@@ -1509,6 +1515,11 @@ if (DEBUG_MODE) {
                                                 onclick="sortQualityTable('ingresos', 'leads')" 
                                                 data-sort="leads">
                                                 Leads <span class="sort-indicator text-xs">↕️</span>
+                                            </th>
+                                            <th class="px-3 py-2 text-center font-medium text-blue-700 cursor-pointer hover:bg-blue-100 sortable" 
+                                                onclick="sortQualityTable('ingresos', 'spend')" 
+                                                data-sort="spend">
+                                                Gasto <span class="sort-indicator text-xs">↕️</span>
                                             </th>
                                             <th class="px-3 py-2 text-center font-medium text-blue-700 cursor-pointer hover:bg-blue-100 sortable" 
                                                 onclick="sortQualityTable('ingresos', 'conversion')" 
@@ -1554,6 +1565,7 @@ if (DEBUG_MODE) {
                                             onclick="toggleSelection('ingresos', '<?php echo htmlspecialchars($ingresos); ?>')">
                                             <td class="px-3 py-2 font-medium"><?php echo htmlspecialchars($ingresos); ?></td>
                                             <td class="px-3 py-2 text-center text-blue-600"><?php echo number_format($data['leads']); ?></td>
+                                            <td class="px-3 py-2 text-center text-purple-600">$<?php echo number_format($data['spend'], 2); ?></td>
                                             <td class="px-3 py-2 text-center <?php echo $conv_rate >= 5 ? 'text-green-600' : ($conv_rate >= 2 ? 'text-yellow-600' : 'text-red-600'); ?>">
                                                 <?php echo number_format($conv_rate, 1); ?>%
                                             </td>
@@ -1586,6 +1598,11 @@ if (DEBUG_MODE) {
                                                 onclick="sortQualityTable('ocupacion', 'leads')" 
                                                 data-sort="leads">
                                                 Leads <span class="sort-indicator text-xs">↕️</span>
+                                            </th>
+                                            <th class="px-3 py-2 text-center font-medium text-purple-700 cursor-pointer hover:bg-purple-100 sortable" 
+                                                onclick="sortQualityTable('ocupacion', 'spend')" 
+                                                data-sort="spend">
+                                                Gasto <span class="sort-indicator text-xs">↕️</span>
                                             </th>
                                             <th class="px-3 py-2 text-center font-medium text-purple-700 cursor-pointer hover:bg-purple-100 sortable" 
                                                 onclick="sortQualityTable('ocupacion', 'conversion')" 
@@ -1631,6 +1648,7 @@ if (DEBUG_MODE) {
                                             onclick="toggleSelection('ocupacion', '<?php echo htmlspecialchars($ocupacion); ?>')">
                                             <td class="px-3 py-2 font-medium"><?php echo htmlspecialchars($ocupacion); ?></td>
                                             <td class="px-3 py-2 text-center text-blue-600"><?php echo number_format($data['leads']); ?></td>
+                                            <td class="px-3 py-2 text-center text-purple-600">$<?php echo number_format($data['spend'], 2); ?></td>
                                             <td class="px-3 py-2 text-center <?php echo $conv_rate >= 5 ? 'text-green-600' : ($conv_rate >= 2 ? 'text-yellow-600' : 'text-red-600'); ?>">
                                                 <?php echo number_format($conv_rate, 1); ?>%
                                             </td>
@@ -1663,6 +1681,11 @@ if (DEBUG_MODE) {
                                                 onclick="sortQualityTable('edad_especifica', 'leads')" 
                                                 data-sort="leads">
                                                 Leads <span class="sort-indicator text-xs">↕️</span>
+                                            </th>
+                                            <th class="px-3 py-2 text-center font-medium text-orange-700 cursor-pointer hover:bg-orange-100 sortable" 
+                                                onclick="sortQualityTable('edad_especifica', 'spend')" 
+                                                data-sort="spend">
+                                                Gasto <span class="sort-indicator text-xs">↕️</span>
                                             </th>
                                             <th class="px-3 py-2 text-center font-medium text-orange-700 cursor-pointer hover:bg-orange-100 sortable" 
                                                 onclick="sortQualityTable('edad_especifica', 'conversion')" 
@@ -1708,6 +1731,7 @@ if (DEBUG_MODE) {
                                             onclick="toggleSelection('edad_especifica', '<?php echo htmlspecialchars($edad); ?>')">
                                             <td class="px-3 py-2 font-medium"><?php echo htmlspecialchars($edad); ?></td>
                                             <td class="px-3 py-2 text-center text-blue-600"><?php echo number_format($data['leads']); ?></td>
+                                            <td class="px-3 py-2 text-center text-purple-600">$<?php echo number_format($data['spend'], 2); ?></td>
                                             <td class="px-3 py-2 text-center <?php echo $conv_rate >= 5 ? 'text-green-600' : ($conv_rate >= 2 ? 'text-yellow-600' : 'text-red-600'); ?>">
                                                 <?php echo number_format($conv_rate, 1); ?>%
                                             </td>
@@ -2863,12 +2887,14 @@ document.addEventListener('DOMContentLoaded', function() {
                     return cells[0]?.textContent?.trim() || '';
                 case 'leads':
                     return getNumericValue(cells[1]?.textContent);
-                case 'conversion':
+                case 'spend':
                     return getNumericValue(cells[2]?.textContent);
-                case 'roas':
+                case 'conversion':
                     return getNumericValue(cells[3]?.textContent);
-                case 'profit':
+                case 'roas':
                     return getNumericValue(cells[4]?.textContent);
+                case 'profit':
+                    return getNumericValue(cells[5]?.textContent);
                 default:
                     return '';
             }
