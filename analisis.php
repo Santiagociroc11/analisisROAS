@@ -1444,113 +1444,255 @@ if (DEBUG_MODE) {
                 </div>
 
                 <!-- Tabla de segmentos de calidad -->
-                <div class="card p-6">
-                    <div class="flex justify-between items-center mb-4">
-                        <h3 class="text-xl font-semibold">📈 Análisis por Segmentos de Calidad</h3>
-                        <div class="flex items-center gap-2">
-                            <label for="quality-sort" class="text-sm font-medium text-gray-700">Ordenar por:</label>
-                            <select id="quality-sort" class="text-sm border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-indigo-500">
-                                <option value="roas">ROAS (Mayor a Menor)</option>
-                                <option value="profit">Profit (Mayor a Menor)</option>
-                                <option value="revenue">Ingresos (Mayor a Menor)</option>
-                                <option value="leads">Leads (Mayor a Menor)</option>
-                                <option value="conversion_rate">Conversión % (Mayor a Menor)</option>
-                                <option value="spend">Gasto (Mayor a Menor)</option>
-                                <option value="puntaje">Puntaje (Mayor a Menor)</option>
-                                <option value="qlead">Calidad Lead (A-Z)</option>
-                                <option value="ingresos">Ingresos (A-Z)</option>
-                                <option value="estudios">Estudios (A-Z)</option>
-                                <option value="ocupacion">Ocupación (A-Z)</option>
-                                <option value="edad_especifica">Edad (A-Z)</option>
-                            </select>
-                        </div>
+                <!-- Análisis Interactivo por Calidad de Leads -->
+                <div class="space-y-6">
+                    <div class="text-center">
+                        <h3 class="text-xl font-semibold mb-2">📊 Análisis Interactivo por Calidad de Leads</h3>
+                        <p class="text-gray-600 text-sm">Selecciona categorías de las tablas para ver métricas combinadas</p>
                     </div>
-                    <div class="overflow-x-auto">
-                        <table id="quality-table" class="min-w-full divide-y divide-gray-200">
-                            <thead class="bg-gray-50">
-                                <tr>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sortable cursor-pointer hover:bg-gray-100" onclick="sortQualityTable('qlead')">
-                                        Calidad Lead <span class="ml-1">↕️</span>
-                                    </th>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sortable cursor-pointer hover:bg-gray-100" onclick="sortQualityTable('ingresos')">
-                                        Ingresos <span class="ml-1">↕️</span>
-                                    </th>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sortable cursor-pointer hover:bg-gray-100" onclick="sortQualityTable('estudios')">
-                                        Estudios <span class="ml-1">↕️</span>
-                                    </th>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sortable cursor-pointer hover:bg-gray-100" onclick="sortQualityTable('ocupacion')">
-                                        Ocupación <span class="ml-1">↕️</span>
-                                    </th>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sortable cursor-pointer hover:bg-gray-100" onclick="sortQualityTable('edad_especifica')">
-                                        Edad <span class="ml-1">↕️</span>
-                                    </th>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sortable cursor-pointer hover:bg-gray-100" onclick="sortQualityTable('leads')">
-                                        Leads <span class="ml-1">↕️</span>
-                                    </th>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sortable cursor-pointer hover:bg-gray-100" onclick="sortQualityTable('sales')">
-                                        Ventas <span class="ml-1">↕️</span>
-                                    </th>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sortable cursor-pointer hover:bg-gray-100" onclick="sortQualityTable('conversion_rate')">
-                                        Conv. % <span class="ml-1">↕️</span>
-                                    </th>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sortable cursor-pointer hover:bg-gray-100" onclick="sortQualityTable('roas')">
-                                        ROAS <span class="ml-1">↕️</span>
-                                    </th>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sortable cursor-pointer hover:bg-gray-100" onclick="sortQualityTable('revenue')">
-                                        Ingresos <span class="ml-1">↕️</span>
-                                    </th>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sortable cursor-pointer hover:bg-gray-100" onclick="sortQualityTable('spend')">
-                                        Gasto <span class="ml-1">↕️</span>
-                                    </th>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sortable cursor-pointer hover:bg-gray-100" onclick="sortQualityTable('profit')">
-                                        Profit <span class="ml-1">↕️</span>
-                                    </th>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sortable cursor-pointer hover:bg-gray-100" onclick="sortQualityTable('puntaje')">
-                                        Puntaje Prom. <span class="ml-1">↕️</span>
-                                    </th>
-                                </tr>
-                            </thead>
-                            <tbody id="quality-tbody" class="bg-white divide-y divide-gray-200">
-                                <?php foreach ($quality_data['segments'] as $segment): ?>
-                                <tr class="quality-row hover:bg-gray-50" 
-                                    data-qlead="<?php echo htmlspecialchars($segment['qlead']); ?>"
-                                    data-ingresos="<?php echo htmlspecialchars($segment['ingresos']); ?>"
-                                    data-estudios="<?php echo htmlspecialchars($segment['estudios']); ?>"
-                                    data-ocupacion="<?php echo htmlspecialchars($segment['ocupacion']); ?>"
-                                    data-edad_especifica="<?php echo htmlspecialchars($segment['edad_especifica']); ?>">
-                                    
-                                    <td class="px-4 py-4 text-sm font-medium text-gray-900">
-                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium 
-                                            <?php echo $segment['qlead'] == 'Caliente' ? 'bg-red-100 text-red-800' : 
-                                                     ($segment['qlead'] == 'Tibio' ? 'bg-yellow-100 text-yellow-800' : 
-                                                     ($segment['qlead'] == 'Frio' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800')); ?>">
-                                            <?php echo htmlspecialchars($segment['qlead']); ?>
-                                        </span>
-                                    </td>
-                                    <td class="px-4 py-4 text-sm text-gray-900"><?php echo htmlspecialchars($segment['ingresos']); ?></td>
-                                    <td class="px-4 py-4 text-sm text-gray-900"><?php echo htmlspecialchars($segment['estudios']); ?></td>
-                                    <td class="px-4 py-4 text-sm text-gray-900"><?php echo htmlspecialchars($segment['ocupacion']); ?></td>
-                                    <td class="px-4 py-4 text-sm text-gray-900"><?php echo htmlspecialchars($segment['edad_especifica']); ?></td>
-                                    <td class="px-4 py-4 text-sm font-semibold text-blue-600"><?php echo number_format($segment['total_leads']); ?></td>
-                                    <td class="px-4 py-4 text-sm font-semibold text-purple-600"><?php echo number_format($segment['total_sales']); ?></td>
-                                    <td class="px-4 py-4 text-sm font-semibold <?php echo $segment['conversion_rate'] >= 5 ? 'text-green-600' : ($segment['conversion_rate'] >= 2 ? 'text-yellow-600' : 'text-red-600'); ?>">
-                                        <?php echo number_format($segment['conversion_rate'], 2); ?>%
-                                    </td>
-                                    <td class="px-4 py-4 text-sm font-bold <?php echo $segment['roas'] >= 2 ? 'text-green-600' : ($segment['roas'] >= 1 ? 'text-yellow-600' : 'text-red-600'); ?>">
-                                        <?php echo number_format($segment['roas'], 2); ?>x
-                                    </td>
-                                    <td class="px-4 py-4 text-sm font-semibold text-green-600">$<?php echo number_format($segment['total_revenue'], 2); ?></td>
-                                    <td class="px-4 py-4 text-sm font-semibold text-red-600">$<?php echo number_format($segment['total_spend'], 2); ?></td>
-                                    <td class="px-4 py-4 text-sm font-bold <?php echo $segment['profit'] >= 0 ? 'text-green-600' : 'text-red-600'; ?>">
-                                        $<?php echo number_format($segment['profit'], 2); ?>
-                                    </td>
-                                    <td class="px-4 py-4 text-sm font-medium text-indigo-600">
-                                        <?php echo number_format($segment['avg_puntaje'], 1); ?>
-                                    </td>
-                                </tr>
-                                <?php endforeach; ?>
-                            </tbody>
-                        </table>
+
+                    <!-- Área de Métricas Seleccionadas -->
+                    <div id="selected-metrics" class="hidden bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-lg border border-blue-200">
+                        <h4 class="text-lg font-semibold text-blue-800 mb-4">📈 Métricas de Selección Combinada</h4>
+                        <div id="selection-info" class="mb-4 text-sm text-blue-700"></div>
+                        <div id="metrics-cards" class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <!-- Métricas se generarán dinámicamente -->
+                        </div>
+                        <button id="clear-selection" class="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors">
+                            🔄 Limpiar Selección
+                        </button>
+                    </div>
+
+                    <!-- Grid de 4 Tablas -->
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        
+                        <!-- Tabla de Estudios -->
+                        <div class="card p-4">
+                            <h4 class="text-lg font-semibold mb-3 text-green-700">🎓 Por Nivel de Estudios</h4>
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-sm">
+                                    <thead class="bg-green-50">
+                                        <tr>
+                                            <th class="px-3 py-2 text-left font-medium text-green-700">Estudios</th>
+                                            <th class="px-3 py-2 text-center font-medium text-green-700">Leads</th>
+                                            <th class="px-3 py-2 text-center font-medium text-green-700">Conv%</th>
+                                            <th class="px-3 py-2 text-center font-medium text-green-700">ROAS</th>
+                                            <th class="px-3 py-2 text-center font-medium text-green-700">Profit</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="estudios-tbody" class="divide-y divide-green-100">
+                                        <?php 
+                                        $estudios_groups = [];
+                                        foreach ($quality_data['segments'] as $segment) {
+                                            $key = $segment['estudios'];
+                                            if (!isset($estudios_groups[$key])) {
+                                                $estudios_groups[$key] = [
+                                                    'leads' => 0, 'sales' => 0, 'revenue' => 0, 'spend' => 0, 'profit' => 0
+                                                ];
+                                            }
+                                            $estudios_groups[$key]['leads'] += $segment['total_leads'];
+                                            $estudios_groups[$key]['sales'] += $segment['total_sales'];
+                                            $estudios_groups[$key]['revenue'] += $segment['total_revenue'];
+                                            $estudios_groups[$key]['spend'] += $segment['total_spend'];
+                                            $estudios_groups[$key]['profit'] += $segment['profit'];
+                                        }
+                                        arsort($estudios_groups);
+                                        foreach ($estudios_groups as $estudios => $data): 
+                                            $conv_rate = $data['leads'] > 0 ? ($data['sales'] / $data['leads']) * 100 : 0;
+                                            $roas = $data['spend'] > 0 ? $data['revenue'] / $data['spend'] : 0;
+                                        ?>
+                                        <tr class="filter-row cursor-pointer hover:bg-green-100 transition-colors" 
+                                            data-category="estudios" 
+                                            data-value="<?php echo htmlspecialchars($estudios); ?>"
+                                            onclick="toggleSelection('estudios', '<?php echo htmlspecialchars($estudios); ?>')">
+                                            <td class="px-3 py-2 font-medium"><?php echo htmlspecialchars($estudios); ?></td>
+                                            <td class="px-3 py-2 text-center text-blue-600"><?php echo number_format($data['leads']); ?></td>
+                                            <td class="px-3 py-2 text-center <?php echo $conv_rate >= 5 ? 'text-green-600' : ($conv_rate >= 2 ? 'text-yellow-600' : 'text-red-600'); ?>">
+                                                <?php echo number_format($conv_rate, 1); ?>%
+                                            </td>
+                                            <td class="px-3 py-2 text-center <?php echo $roas >= 2 ? 'text-green-600' : ($roas >= 1 ? 'text-yellow-600' : 'text-red-600'); ?>">
+                                                <?php echo number_format($roas, 1); ?>x
+                                            </td>
+                                            <td class="px-3 py-2 text-center <?php echo $data['profit'] >= 0 ? 'text-green-600' : 'text-red-600'; ?>">
+                                                $<?php echo number_format($data['profit']); ?>
+                                            </td>
+                                        </tr>
+                                        <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Tabla de Ingresos -->
+                        <div class="card p-4">
+                            <h4 class="text-lg font-semibold mb-3 text-blue-700">💰 Por Nivel de Ingresos</h4>
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-sm">
+                                    <thead class="bg-blue-50">
+                                        <tr>
+                                            <th class="px-3 py-2 text-left font-medium text-blue-700">Ingresos</th>
+                                            <th class="px-3 py-2 text-center font-medium text-blue-700">Leads</th>
+                                            <th class="px-3 py-2 text-center font-medium text-blue-700">Conv%</th>
+                                            <th class="px-3 py-2 text-center font-medium text-blue-700">ROAS</th>
+                                            <th class="px-3 py-2 text-center font-medium text-blue-700">Profit</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="ingresos-tbody" class="divide-y divide-blue-100">
+                                        <?php 
+                                        $ingresos_groups = [];
+                                        foreach ($quality_data['segments'] as $segment) {
+                                            $key = $segment['ingresos'];
+                                            if (!isset($ingresos_groups[$key])) {
+                                                $ingresos_groups[$key] = [
+                                                    'leads' => 0, 'sales' => 0, 'revenue' => 0, 'spend' => 0, 'profit' => 0
+                                                ];
+                                            }
+                                            $ingresos_groups[$key]['leads'] += $segment['total_leads'];
+                                            $ingresos_groups[$key]['sales'] += $segment['total_sales'];
+                                            $ingresos_groups[$key]['revenue'] += $segment['total_revenue'];
+                                            $ingresos_groups[$key]['spend'] += $segment['total_spend'];
+                                            $ingresos_groups[$key]['profit'] += $segment['profit'];
+                                        }
+                                        arsort($ingresos_groups);
+                                        foreach ($ingresos_groups as $ingresos => $data): 
+                                            $conv_rate = $data['leads'] > 0 ? ($data['sales'] / $data['leads']) * 100 : 0;
+                                            $roas = $data['spend'] > 0 ? $data['revenue'] / $data['spend'] : 0;
+                                        ?>
+                                        <tr class="filter-row cursor-pointer hover:bg-blue-100 transition-colors" 
+                                            data-category="ingresos" 
+                                            data-value="<?php echo htmlspecialchars($ingresos); ?>"
+                                            onclick="toggleSelection('ingresos', '<?php echo htmlspecialchars($ingresos); ?>')">
+                                            <td class="px-3 py-2 font-medium"><?php echo htmlspecialchars($ingresos); ?></td>
+                                            <td class="px-3 py-2 text-center text-blue-600"><?php echo number_format($data['leads']); ?></td>
+                                            <td class="px-3 py-2 text-center <?php echo $conv_rate >= 5 ? 'text-green-600' : ($conv_rate >= 2 ? 'text-yellow-600' : 'text-red-600'); ?>">
+                                                <?php echo number_format($conv_rate, 1); ?>%
+                                            </td>
+                                            <td class="px-3 py-2 text-center <?php echo $roas >= 2 ? 'text-green-600' : ($roas >= 1 ? 'text-yellow-600' : 'text-red-600'); ?>">
+                                                <?php echo number_format($roas, 1); ?>x
+                                            </td>
+                                            <td class="px-3 py-2 text-center <?php echo $data['profit'] >= 0 ? 'text-green-600' : 'text-red-600'; ?>">
+                                                $<?php echo number_format($data['profit']); ?>
+                                            </td>
+                                        </tr>
+                                        <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Tabla de Ocupación -->
+                        <div class="card p-4">
+                            <h4 class="text-lg font-semibold mb-3 text-purple-700">💼 Por Ocupación</h4>
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-sm">
+                                    <thead class="bg-purple-50">
+                                        <tr>
+                                            <th class="px-3 py-2 text-left font-medium text-purple-700">Ocupación</th>
+                                            <th class="px-3 py-2 text-center font-medium text-purple-700">Leads</th>
+                                            <th class="px-3 py-2 text-center font-medium text-purple-700">Conv%</th>
+                                            <th class="px-3 py-2 text-center font-medium text-purple-700">ROAS</th>
+                                            <th class="px-3 py-2 text-center font-medium text-purple-700">Profit</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="ocupacion-tbody" class="divide-y divide-purple-100">
+                                        <?php 
+                                        $ocupacion_groups = [];
+                                        foreach ($quality_data['segments'] as $segment) {
+                                            $key = $segment['ocupacion'];
+                                            if (!isset($ocupacion_groups[$key])) {
+                                                $ocupacion_groups[$key] = [
+                                                    'leads' => 0, 'sales' => 0, 'revenue' => 0, 'spend' => 0, 'profit' => 0
+                                                ];
+                                            }
+                                            $ocupacion_groups[$key]['leads'] += $segment['total_leads'];
+                                            $ocupacion_groups[$key]['sales'] += $segment['total_sales'];
+                                            $ocupacion_groups[$key]['revenue'] += $segment['total_revenue'];
+                                            $ocupacion_groups[$key]['spend'] += $segment['total_spend'];
+                                            $ocupacion_groups[$key]['profit'] += $segment['profit'];
+                                        }
+                                        arsort($ocupacion_groups);
+                                        foreach ($ocupacion_groups as $ocupacion => $data): 
+                                            $conv_rate = $data['leads'] > 0 ? ($data['sales'] / $data['leads']) * 100 : 0;
+                                            $roas = $data['spend'] > 0 ? $data['revenue'] / $data['spend'] : 0;
+                                        ?>
+                                        <tr class="filter-row cursor-pointer hover:bg-purple-100 transition-colors" 
+                                            data-category="ocupacion" 
+                                            data-value="<?php echo htmlspecialchars($ocupacion); ?>"
+                                            onclick="toggleSelection('ocupacion', '<?php echo htmlspecialchars($ocupacion); ?>')">
+                                            <td class="px-3 py-2 font-medium"><?php echo htmlspecialchars($ocupacion); ?></td>
+                                            <td class="px-3 py-2 text-center text-blue-600"><?php echo number_format($data['leads']); ?></td>
+                                            <td class="px-3 py-2 text-center <?php echo $conv_rate >= 5 ? 'text-green-600' : ($conv_rate >= 2 ? 'text-yellow-600' : 'text-red-600'); ?>">
+                                                <?php echo number_format($conv_rate, 1); ?>%
+                                            </td>
+                                            <td class="px-3 py-2 text-center <?php echo $roas >= 2 ? 'text-green-600' : ($roas >= 1 ? 'text-yellow-600' : 'text-red-600'); ?>">
+                                                <?php echo number_format($roas, 1); ?>x
+                                            </td>
+                                            <td class="px-3 py-2 text-center <?php echo $data['profit'] >= 0 ? 'text-green-600' : 'text-red-600'; ?>">
+                                                $<?php echo number_format($data['profit']); ?>
+                                            </td>
+                                        </tr>
+                                        <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Tabla de Edad -->
+                        <div class="card p-4">
+                            <h4 class="text-lg font-semibold mb-3 text-orange-700">🎂 Por Edad Específica</h4>
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-sm">
+                                    <thead class="bg-orange-50">
+                                        <tr>
+                                            <th class="px-3 py-2 text-left font-medium text-orange-700">Edad</th>
+                                            <th class="px-3 py-2 text-center font-medium text-orange-700">Leads</th>
+                                            <th class="px-3 py-2 text-center font-medium text-orange-700">Conv%</th>
+                                            <th class="px-3 py-2 text-center font-medium text-orange-700">ROAS</th>
+                                            <th class="px-3 py-2 text-center font-medium text-orange-700">Profit</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="edad-tbody" class="divide-y divide-orange-100">
+                                        <?php 
+                                        $edad_groups = [];
+                                        foreach ($quality_data['segments'] as $segment) {
+                                            $key = $segment['edad_especifica'];
+                                            if (!isset($edad_groups[$key])) {
+                                                $edad_groups[$key] = [
+                                                    'leads' => 0, 'sales' => 0, 'revenue' => 0, 'spend' => 0, 'profit' => 0
+                                                ];
+                                            }
+                                            $edad_groups[$key]['leads'] += $segment['total_leads'];
+                                            $edad_groups[$key]['sales'] += $segment['total_sales'];
+                                            $edad_groups[$key]['revenue'] += $segment['total_revenue'];
+                                            $edad_groups[$key]['spend'] += $segment['total_spend'];
+                                            $edad_groups[$key]['profit'] += $segment['profit'];
+                                        }
+                                        arsort($edad_groups);
+                                        foreach ($edad_groups as $edad => $data): 
+                                            $conv_rate = $data['leads'] > 0 ? ($data['sales'] / $data['leads']) * 100 : 0;
+                                            $roas = $data['spend'] > 0 ? $data['revenue'] / $data['spend'] : 0;
+                                        ?>
+                                        <tr class="filter-row cursor-pointer hover:bg-orange-100 transition-colors" 
+                                            data-category="edad_especifica" 
+                                            data-value="<?php echo htmlspecialchars($edad); ?>"
+                                            onclick="toggleSelection('edad_especifica', '<?php echo htmlspecialchars($edad); ?>')">
+                                            <td class="px-3 py-2 font-medium"><?php echo htmlspecialchars($edad); ?></td>
+                                            <td class="px-3 py-2 text-center text-blue-600"><?php echo number_format($data['leads']); ?></td>
+                                            <td class="px-3 py-2 text-center <?php echo $conv_rate >= 5 ? 'text-green-600' : ($conv_rate >= 2 ? 'text-yellow-600' : 'text-red-600'); ?>">
+                                                <?php echo number_format($conv_rate, 1); ?>%
+                                            </td>
+                                            <td class="px-3 py-2 text-center <?php echo $roas >= 2 ? 'text-green-600' : ($roas >= 1 ? 'text-yellow-600' : 'text-red-600'); ?>">
+                                                <?php echo number_format($roas, 1); ?>x
+                                            </td>
+                                            <td class="px-3 py-2 text-center <?php echo $data['profit'] >= 0 ? 'text-green-600' : 'text-red-600'; ?>">
+                                                $<?php echo number_format($data['profit']); ?>
+                                            </td>
+                                        </tr>
+                                        <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -2531,6 +2673,137 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Inicializar datos
         initializeQualityRows();
+    }
+
+    // === FUNCIONALIDAD INTERACTIVA DE TABLAS DE CALIDAD ===
+    if (qualityData && qualityData.segments) {
+        let activeFilters = {};
+        
+        // Función global para toggle de selección
+        window.toggleSelection = function(category, value) {
+            // Toggle del filtro
+            if (activeFilters[category] && activeFilters[category] === value) {
+                delete activeFilters[category];
+            } else {
+                activeFilters[category] = value;
+            }
+            
+            updateTableSelections();
+            updateCombinedMetrics();
+        };
+        
+        function updateTableSelections() {
+            // Limpiar selecciones visuales
+            document.querySelectorAll('.filter-row').forEach(row => {
+                row.classList.remove('bg-green-200', 'bg-blue-200', 'bg-purple-200', 'bg-orange-200');
+                row.classList.remove('ring-2', 'ring-green-500', 'ring-blue-500', 'ring-purple-500', 'ring-orange-500');
+            });
+            
+            // Aplicar selecciones actuales
+            Object.entries(activeFilters).forEach(([category, value]) => {
+                const row = document.querySelector(`[data-category="${category}"][data-value="${value}"]`);
+                if (row) {
+                    const colorMap = {
+                        'estudios': ['bg-green-200', 'ring-2', 'ring-green-500'],
+                        'ingresos': ['bg-blue-200', 'ring-2', 'ring-blue-500'],
+                        'ocupacion': ['bg-purple-200', 'ring-2', 'ring-purple-500'],
+                        'edad_especifica': ['bg-orange-200', 'ring-2', 'ring-orange-500']
+                    };
+                    if (colorMap[category]) {
+                        row.classList.add(...colorMap[category]);
+                    }
+                }
+            });
+        }
+        
+        function updateCombinedMetrics() {
+            const selectedMetricsDiv = document.getElementById('selected-metrics');
+            const selectionInfo = document.getElementById('selection-info');
+            const metricsCards = document.getElementById('metrics-cards');
+            
+            if (Object.keys(activeFilters).length === 0) {
+                selectedMetricsDiv.classList.add('hidden');
+                return;
+            }
+            
+            // Mostrar el área de métricas
+            selectedMetricsDiv.classList.remove('hidden');
+            
+            // Actualizar información de selección
+            const filterTexts = Object.entries(activeFilters).map(([category, value]) => {
+                const categoryNames = {
+                    'estudios': '🎓 Estudios',
+                    'ingresos': '💰 Ingresos',
+                    'ocupacion': '💼 Ocupación',
+                    'edad_especifica': '🎂 Edad'
+                };
+                return `${categoryNames[category]}: <strong>${value}</strong>`;
+            });
+            selectionInfo.innerHTML = `Filtros activos: ${filterTexts.join(' • ')}`;
+            
+            // Calcular métricas combinadas
+            const filteredSegments = qualityData.segments.filter(segment => {
+                return Object.entries(activeFilters).every(([category, value]) => {
+                    return segment[category] === value;
+                });
+            });
+            
+            // Calcular totales
+            const totals = filteredSegments.reduce((acc, segment) => {
+                acc.leads += segment.total_leads;
+                acc.sales += segment.total_sales;
+                acc.revenue += segment.total_revenue;
+                acc.spend += segment.total_spend;
+                acc.profit += segment.profit;
+                return acc;
+            }, { leads: 0, sales: 0, revenue: 0, spend: 0, profit: 0 });
+            
+            const conversionRate = totals.leads > 0 ? (totals.sales / totals.leads) * 100 : 0;
+            const roas = totals.spend > 0 ? totals.revenue / totals.spend : 0;
+            
+            // Generar tarjetas de métricas
+            metricsCards.innerHTML = `
+                <div class="bg-white p-4 rounded-lg border border-blue-200">
+                    <div class="text-2xl font-bold text-blue-600">${totals.leads.toLocaleString()}</div>
+                    <div class="text-sm text-blue-700">Total Leads</div>
+                </div>
+                <div class="bg-white p-4 rounded-lg border border-purple-200">
+                    <div class="text-2xl font-bold text-purple-600">${totals.sales.toLocaleString()}</div>
+                    <div class="text-sm text-purple-700">Total Ventas</div>
+                </div>
+                <div class="bg-white p-4 rounded-lg border border-yellow-200">
+                    <div class="text-2xl font-bold ${conversionRate >= 5 ? 'text-green-600' : (conversionRate >= 2 ? 'text-yellow-600' : 'text-red-600')}">${conversionRate.toFixed(1)}%</div>
+                    <div class="text-sm text-gray-700">Tasa Conversión</div>
+                </div>
+                <div class="bg-white p-4 rounded-lg border border-green-200">
+                    <div class="text-2xl font-bold ${roas >= 2 ? 'text-green-600' : (roas >= 1 ? 'text-yellow-600' : 'text-red-600')}">${roas.toFixed(1)}x</div>
+                    <div class="text-sm text-gray-700">ROAS</div>
+                </div>
+                <div class="bg-white p-4 rounded-lg border border-green-200">
+                    <div class="text-2xl font-bold text-green-600">$${totals.revenue.toLocaleString()}</div>
+                    <div class="text-sm text-green-700">Ingresos</div>
+                </div>
+                <div class="bg-white p-4 rounded-lg border border-red-200">
+                    <div class="text-2xl font-bold text-red-600">$${totals.spend.toLocaleString()}</div>
+                    <div class="text-sm text-red-700">Gasto</div>
+                </div>
+                <div class="bg-white p-4 rounded-lg border border-gray-200">
+                    <div class="text-2xl font-bold ${totals.profit >= 0 ? 'text-green-600' : 'text-red-600'}">$${totals.profit.toLocaleString()}</div>
+                    <div class="text-sm text-gray-700">Profit</div>
+                </div>
+                <div class="bg-white p-4 rounded-lg border border-indigo-200">
+                    <div class="text-2xl font-bold text-indigo-600">${filteredSegments.length}</div>
+                    <div class="text-sm text-indigo-700">Segmentos</div>
+                </div>
+            `;
+        }
+        
+        // Función para limpiar selección
+        document.getElementById('clear-selection')?.addEventListener('click', function() {
+            activeFilters = {};
+            updateTableSelections();
+            updateCombinedMetrics();
+        });
     }
 });
 </script>
