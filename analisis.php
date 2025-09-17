@@ -236,6 +236,7 @@ function process_spend_csv($file_path) {
         $amount_spent_index = array_search('amount spent', $header);
         $placement_index = array_search('placement', $header);
         $platform_index = array_search('platform', $header);
+        $ad_id_index = array_search('ad id', $header); // Buscar campo Ad ID
         
         if ($campaign_index === false || $ad_set_index === false || $ad_name_index === false || $amount_spent_index === false) {
             $error_message = "CSV debe contener 'Campaign Name', 'Ad Set Name', 'Ad Name' y 'Amount Spent'.";
@@ -243,10 +244,16 @@ function process_spend_csv($file_path) {
         }
         
         while (($data = fgetcsv($handle, 1000, ",")) !== FALSE) {
-            if (count($data) > max($campaign_index, $ad_set_index, $ad_name_index, $amount_spent_index)) {
+            $max_index = max($campaign_index, $ad_set_index, $ad_name_index, $amount_spent_index);
+            if ($ad_id_index !== false) {
+                $max_index = max($max_index, $ad_id_index);
+            }
+            
+            if (count($data) > $max_index) {
                 $campaign_name = trim($data[$campaign_index]);
                 $ad_set_name = trim($data[$ad_set_index]);
                 $ad_name_original = trim($data[$ad_name_index]);
+                $ad_id = $ad_id_index !== false ? trim($data[$ad_id_index]) : '';
                 $placement = $placement_index !== false ? trim($data[$placement_index]) : '';
                 $platform = $platform_index !== false ? trim($data[$platform_index]) : '';
                 $amount = floatval(str_replace(',', '.', $data[$amount_spent_index]));
@@ -266,6 +273,7 @@ function process_spend_csv($file_path) {
                             'ad_set_name' => $ad_set_name,
                             'ad_name_original' => $ad_name_original,
                             'ad_name_normalized' => $ad_name_normalized,
+                            'ad_id' => $ad_id,
                             'segmentation_name' => $segmentation_name,
                             'spend' => 0
                         ];
@@ -309,13 +317,14 @@ function get_revenue_data($base_table, $sales_table, $multiply_revenue = false) 
                 l.ANUNCIO,
                 l.SEGMENTACION,
                 l.CAMPAÑA,
+                COALESCE(l.AD_ID, '') AS AD_ID,
                 COUNT(l.`#`) AS total_leads,
                 COUNT(v.cliente_id) AS total_sales,
                 COALESCE(SUM(CAST(REPLACE(v.monto, ',', '.') AS DECIMAL(10, 2))) {$revenue_multiplier}, 0) AS total_revenue
             FROM `{$base_table}` AS l
             LEFT JOIN `{$sales_table}` AS v ON l.`#` = v.cliente_id
             WHERE l.ANUNCIO IS NOT NULL AND l.ANUNCIO != '' AND l.SEGMENTACION IS NOT NULL
-            GROUP BY l.ANUNCIO, l.SEGMENTACION, l.CAMPAÑA;
+            GROUP BY l.ANUNCIO, l.SEGMENTACION, l.CAMPAÑA, l.AD_ID;
         ";
         $result = $conn->query($sql);
         while ($row = $result->fetch_assoc()) {
@@ -353,6 +362,7 @@ function get_quality_lead_data($base_table, $sales_table, $multiply_revenue = fa
                 l.ANUNCIO,
                 l.SEGMENTACION,
                 l.CAMPAÑA,
+                COALESCE(l.AD_ID, '') AS AD_ID,
                 l.QLEAD,
                 l.INGRESOS,
                 l.ESTUDIOS,
@@ -365,7 +375,7 @@ function get_quality_lead_data($base_table, $sales_table, $multiply_revenue = fa
             FROM `{$base_table}` AS l
             LEFT JOIN `{$sales_table}` AS v ON l.`#` = v.cliente_id
             WHERE l.ANUNCIO IS NOT NULL AND l.ANUNCIO != '' AND l.SEGMENTACION IS NOT NULL
-            GROUP BY l.ANUNCIO, l.SEGMENTACION, l.CAMPAÑA, l.QLEAD, l.INGRESOS, l.ESTUDIOS, l.OCUPACION, l.PROPOSITO, l.PUNTAJE;
+            GROUP BY l.ANUNCIO, l.SEGMENTACION, l.CAMPAÑA, l.AD_ID, l.QLEAD, l.INGRESOS, l.ESTUDIOS, l.OCUPACION, l.PROPOSITO, l.PUNTAJE;
         ";
         $result = $conn->query($sql);
         while ($row = $result->fetch_assoc()) {
@@ -383,10 +393,31 @@ function get_quality_lead_data($base_table, $sales_table, $multiply_revenue = fa
     }
 }
 
+function find_matching_ad_key($seg_data, $ads) {
+    // Primero intentar coincidencia por AD_ID si está disponible
+    if (!empty($seg_data['ad_id'])) {
+        foreach ($ads as $ad_key => $ad_data) {
+            foreach ($ad_data['segmentations'] as $seg) {
+                if (!empty($seg['ad_id']) && $seg['ad_id'] === $seg_data['ad_id']) {
+                    return $ad_key;
+                }
+            }
+        }
+    }
+    
+    // Si no hay coincidencia por AD_ID, usar el método anterior por nombre normalizado
+    return $seg_data['ad_name_normalized'];
+}
+
 function build_interactive_data($revenue_data, $segmentations_data, $spend_mapping, $multiply_revenue = false) {
     $ads = [];
     $total_revenue_all = 0;
     $total_spend_all = 0;
+    
+    // Contadores para estadísticas de coincidencias
+    $matches_by_ad_id = 0;
+    $matches_by_name = 0;
+    $no_matches = 0;
 
     // Primero: Agrupar ingresos por anuncio y segmentación desde la BD
     foreach ($revenue_data as $rev_item) {
@@ -447,6 +478,7 @@ function build_interactive_data($revenue_data, $segmentations_data, $spend_mappi
             $ads[$ad_name_normalized]['segmentations'][] = [
                 'name' => clean_display_name($segmentation_original), // Mostrar nombre limpio
                 'campaign_name' => $campaign_name,
+                'ad_id' => $rev_item['AD_ID'] ?? '',
                 'revenue' => $revenue,
                 'leads' => $leads,
                 'sales' => $sales,
@@ -468,19 +500,41 @@ function build_interactive_data($revenue_data, $segmentations_data, $spend_mappi
         $segmentation_name = $seg_data['segmentation_name'];
         $segmentation_normalized = normalize_ad_name($segmentation_name);
         $spend = $seg_data['spend'];
+        $ad_id_from_csv = $seg_data['ad_id'];
+        
+        // Buscar la coincidencia usando AD_ID si está disponible, sino por nombre
+        $matching_ad_key = find_matching_ad_key($seg_data, $ads);
         
         // Si existe el anuncio en nuestros datos de revenue
-        if (isset($ads[$ad_name_normalized])) {
+        if (isset($ads[$matching_ad_key])) {
             // Buscar la segmentación correspondiente
             $seg_found = false;
-            foreach ($ads[$ad_name_normalized]['segmentations'] as &$existing_seg) {
-                if (normalize_ad_name($existing_seg['name']) === $segmentation_normalized) {
+            $matched_by_ad_id = false;
+            foreach ($ads[$matching_ad_key]['segmentations'] as &$existing_seg) {
+                // Primero intentar coincidencia por AD_ID si ambos están disponibles
+                if (!empty($ad_id_from_csv) && !empty($existing_seg['ad_id']) && $ad_id_from_csv === $existing_seg['ad_id']) {
                     $existing_seg['spend_allocated'] += $spend; // Acumular gasto total
                     $existing_seg['profit'] = $existing_seg['revenue'] - $existing_seg['spend_allocated'];
                     $existing_seg['cpl'] = ($existing_seg['leads'] > 0) ? $existing_seg['spend_allocated'] / $existing_seg['leads'] : 0;
                     $seg_found = true;
+                    $matched_by_ad_id = true;
+                    $matches_by_ad_id++;
                     if (DEBUG_MODE) {
-                        debug_log("COINCIDENCIA ENCONTRADA - Anuncio: $ad_name_normalized, Segmentación: $segmentation_normalized, Gasto: $spend");
+                        debug_log("COINCIDENCIA POR AD_ID ENCONTRADA - AD_ID: $ad_id_from_csv, Gasto: $spend");
+                    }
+                    break;
+                }
+                // Si no hay coincidencia por AD_ID, usar el método anterior por nombre
+                elseif (normalize_ad_name($existing_seg['name']) === $segmentation_normalized) {
+                    $existing_seg['spend_allocated'] += $spend; // Acumular gasto total
+                    $existing_seg['profit'] = $existing_seg['revenue'] - $existing_seg['spend_allocated'];
+                    $existing_seg['cpl'] = ($existing_seg['leads'] > 0) ? $existing_seg['spend_allocated'] / $existing_seg['leads'] : 0;
+                    $seg_found = true;
+                    if (!$matched_by_ad_id) {
+                        $matches_by_name++;
+                    }
+                    if (DEBUG_MODE) {
+                        debug_log("COINCIDENCIA POR NOMBRE ENCONTRADA - Anuncio: $ad_name_normalized, Segmentación: $segmentation_normalized, Gasto: $spend");
                     }
                     break;
                 }
@@ -492,9 +546,10 @@ function build_interactive_data($revenue_data, $segmentations_data, $spend_mappi
                 if (DEBUG_MODE) {
                     debug_log("NO SE ENCONTRÓ SEGMENTACIÓN - Anuncio: $ad_name_normalized, Segmentación: $segmentation_normalized");
                 }
-                $ads[$ad_name_normalized]['segmentations'][] = [
+                $ads[$matching_ad_key]['segmentations'][] = [
                     'name' => clean_display_name($segmentation_name), // Mostrar nombre limpio
                     'campaign_name' => $seg_data['campaign_name'],
+                    'ad_id' => $ad_id_from_csv,
                     'revenue' => 0,
                     'leads' => 0,
                     'sales' => 0,
@@ -503,9 +558,10 @@ function build_interactive_data($revenue_data, $segmentations_data, $spend_mappi
                     'cpl' => 0,
                     'conversion_rate' => 0
                 ];
+                $no_matches++;
             }
             
-            $ads[$ad_name_normalized]['total_spend'] += $spend;
+            $ads[$matching_ad_key]['total_spend'] += $spend;
         } else {
             // Anuncio con gasto pero sin datos de revenue en la BD
             $display_name = clean_display_name($seg_data['ad_name_original']);
@@ -520,6 +576,7 @@ function build_interactive_data($revenue_data, $segmentations_data, $spend_mappi
                 'segmentations' => [[
                     'name' => clean_display_name($segmentation_name), // Mostrar nombre limpio
                     'campaign_name' => $seg_data['campaign_name'],
+                    'ad_id' => $ad_id_from_csv,
                     'revenue' => 0,
                     'leads' => 0,
                     'sales' => 0,
@@ -529,6 +586,7 @@ function build_interactive_data($revenue_data, $segmentations_data, $spend_mappi
                     'conversion_rate' => 0
                 ]]
             ];
+            $no_matches++;
         }
         
         $total_spend_all += $spend;
@@ -570,6 +628,15 @@ function build_interactive_data($revenue_data, $segmentations_data, $spend_mappi
 
     $total_roas_all = ($total_spend_all > 0) ? $total_revenue_all / $total_spend_all : 0;
     $best_ad_key = !empty($ads) ? array_key_first($ads) : null;
+
+    // Console log con estadísticas de coincidencias
+    echo "<script>console.log('📊 ESTADÍSTICAS DE COINCIDENCIAS:');";
+    echo "console.log('✅ Coincidencias por AD_ID: $matches_by_ad_id');";
+    echo "console.log('📝 Coincidencias por nombre: $matches_by_name');";
+    echo "console.log('❌ Sin coincidencia: $no_matches');";
+    echo "console.log('📈 Total procesado: " . ($matches_by_ad_id + $matches_by_name + $no_matches) . "');";
+    echo "console.log('🎯 Precisión AD_ID: " . (($matches_by_ad_id + $matches_by_name + $no_matches) > 0 ? round(($matches_by_ad_id / ($matches_by_ad_id + $matches_by_name + $no_matches)) * 100, 1) : 0) . "%');";
+    echo "</script>";
 
     return [
         'summary' => [
@@ -636,6 +703,7 @@ function build_quality_analysis($quality_lead_data, $segmentations_data, $spend_
                 'ad_name' => clean_display_name($row['ANUNCIO']),
                 'segmentation' => clean_display_name($row['SEGMENTACION']),
                 'campaign' => $row['CAMPAÑA'],
+                'ad_id' => $row['AD_ID'] ?? '',
                 'leads' => 0,
                 'sales' => 0,
                 'revenue' => 0,
@@ -865,7 +933,7 @@ if (DEBUG_MODE) {
                 <div>
                     <label for="spend_report" class="block text-sm font-medium text-gray-700 mb-2">4. Cargar Reporte de Gastos (CSV)</label>
                     <input type="file" name="spend_report" id="spend_report" required class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 transition-colors cursor-pointer">
-                    <p class="text-xs text-gray-500 mt-1">Archivo CSV que debe contener columnas 'Ad Name' y 'Amount Spent'</p>
+                    <p class="text-xs text-gray-500 mt-1">Archivo CSV que debe contener columnas 'Ad Name' y 'Amount Spent'. Opcionalmente puede incluir 'Ad ID' para mejor precisión en la coincidencia.</p>
                 </div>
                 
                 <!-- Botón de Envío -->
@@ -1142,23 +1210,62 @@ if (DEBUG_MODE) {
 
                 <!-- Tabla de segmentos de calidad -->
                 <div class="card p-6">
-                    <h3 class="text-xl font-semibold mb-4">📈 Análisis por Segmentos de Calidad</h3>
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-xl font-semibold">📈 Análisis por Segmentos de Calidad</h3>
+                        <div class="flex items-center gap-2">
+                            <label for="quality-sort" class="text-sm font-medium text-gray-700">Ordenar por:</label>
+                            <select id="quality-sort" class="text-sm border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-indigo-500">
+                                <option value="roas">ROAS (Mayor a Menor)</option>
+                                <option value="profit">Profit (Mayor a Menor)</option>
+                                <option value="revenue">Ingresos (Mayor a Menor)</option>
+                                <option value="leads">Leads (Mayor a Menor)</option>
+                                <option value="conversion_rate">Conversión % (Mayor a Menor)</option>
+                                <option value="spend">Gasto (Mayor a Menor)</option>
+                                <option value="puntaje">Puntaje (Mayor a Menor)</option>
+                                <option value="qlead">Calidad Lead (A-Z)</option>
+                            </select>
+                        </div>
+                    </div>
                     <div class="overflow-x-auto">
                         <table id="quality-table" class="min-w-full divide-y divide-gray-200">
                             <thead class="bg-gray-50">
                                 <tr>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Calidad Lead</th>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ingresos</th>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estudios</th>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ocupación</th>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Leads</th>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ventas</th>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Conv. %</th>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ROAS</th>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ingresos</th>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Gasto</th>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Profit</th>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Puntaje Prom.</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sortable cursor-pointer hover:bg-gray-100" onclick="sortQualityTable('qlead')">
+                                        Calidad Lead <span class="ml-1">↕️</span>
+                                    </th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sortable cursor-pointer hover:bg-gray-100" onclick="sortQualityTable('ingresos')">
+                                        Ingresos <span class="ml-1">↕️</span>
+                                    </th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sortable cursor-pointer hover:bg-gray-100" onclick="sortQualityTable('estudios')">
+                                        Estudios <span class="ml-1">↕️</span>
+                                    </th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sortable cursor-pointer hover:bg-gray-100" onclick="sortQualityTable('ocupacion')">
+                                        Ocupación <span class="ml-1">↕️</span>
+                                    </th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sortable cursor-pointer hover:bg-gray-100" onclick="sortQualityTable('leads')">
+                                        Leads <span class="ml-1">↕️</span>
+                                    </th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sortable cursor-pointer hover:bg-gray-100" onclick="sortQualityTable('sales')">
+                                        Ventas <span class="ml-1">↕️</span>
+                                    </th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sortable cursor-pointer hover:bg-gray-100" onclick="sortQualityTable('conversion_rate')">
+                                        Conv. % <span class="ml-1">↕️</span>
+                                    </th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sortable cursor-pointer hover:bg-gray-100" onclick="sortQualityTable('roas')">
+                                        ROAS <span class="ml-1">↕️</span>
+                                    </th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sortable cursor-pointer hover:bg-gray-100" onclick="sortQualityTable('revenue')">
+                                        Ingresos <span class="ml-1">↕️</span>
+                                    </th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sortable cursor-pointer hover:bg-gray-100" onclick="sortQualityTable('spend')">
+                                        Gasto <span class="ml-1">↕️</span>
+                                    </th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sortable cursor-pointer hover:bg-gray-100" onclick="sortQualityTable('profit')">
+                                        Profit <span class="ml-1">↕️</span>
+                                    </th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sortable cursor-pointer hover:bg-gray-100" onclick="sortQualityTable('puntaje')">
+                                        Puntaje Prom. <span class="ml-1">↕️</span>
+                                    </th>
                                 </tr>
                             </thead>
                             <tbody id="quality-tbody" class="bg-white divide-y divide-gray-200">
@@ -1926,6 +2033,87 @@ document.addEventListener('DOMContentLoaded', function() {
                 element.addEventListener('change', applyQualityFilters);
             }
         });
+
+        // === FUNCIONALIDAD DE ORDENACIÓN PARA CALIDAD ===
+        let qualitySortOrder = {};
+        let qualityRows = [];
+
+        function initializeQualityRows() {
+            qualityRows = Array.from(document.querySelectorAll('.quality-row')).map(row => {
+                const cells = row.querySelectorAll('td');
+                return {
+                    element: row,
+                    qlead: row.dataset.qlead,
+                    ingresos: row.dataset.ingresos,
+                    estudios: row.dataset.estudios,
+                    ocupacion: row.dataset.ocupacion,
+                    leads: parseFloat(cells[4]?.textContent.replace(/,/g, '')) || 0,
+                    sales: parseFloat(cells[5]?.textContent.replace(/,/g, '')) || 0,
+                    conversion_rate: parseFloat(cells[6]?.textContent.replace(/%/g, '')) || 0,
+                    roas: parseFloat(cells[7]?.textContent.replace(/x/g, '')) || 0,
+                    revenue: parseFloat(cells[8]?.textContent.replace(/[\$,]/g, '')) || 0,
+                    spend: parseFloat(cells[9]?.textContent.replace(/[\$,]/g, '')) || 0,
+                    profit: parseFloat(cells[10]?.textContent.replace(/[\$,]/g, '')) || 0,
+                    puntaje: parseFloat(cells[11]?.textContent) || 0
+                };
+            });
+        }
+
+        function sortQualityBy(criteria) {
+            if (!qualityRows.length) {
+                initializeQualityRows();
+            }
+
+            // Toggle sort order
+            qualitySortOrder[criteria] = !qualitySortOrder[criteria];
+            const ascending = qualitySortOrder[criteria];
+
+            const sortFunctions = {
+                'qlead': ascending ? (a, b) => a.qlead.localeCompare(b.qlead) : (a, b) => b.qlead.localeCompare(a.qlead),
+                'ingresos': ascending ? (a, b) => a.ingresos.localeCompare(b.ingresos) : (a, b) => b.ingresos.localeCompare(a.ingresos),
+                'estudios': ascending ? (a, b) => a.estudios.localeCompare(b.estudios) : (a, b) => b.estudios.localeCompare(a.estudios),
+                'ocupacion': ascending ? (a, b) => a.ocupacion.localeCompare(b.ocupacion) : (a, b) => b.ocupacion.localeCompare(a.ocupacion),
+                'leads': ascending ? (a, b) => a.leads - b.leads : (a, b) => b.leads - a.leads,
+                'sales': ascending ? (a, b) => a.sales - b.sales : (a, b) => b.sales - a.sales,
+                'conversion_rate': ascending ? (a, b) => a.conversion_rate - b.conversion_rate : (a, b) => b.conversion_rate - a.conversion_rate,
+                'roas': ascending ? (a, b) => a.roas - b.roas : (a, b) => b.roas - a.roas,
+                'revenue': ascending ? (a, b) => a.revenue - b.revenue : (a, b) => b.revenue - a.revenue,
+                'spend': ascending ? (a, b) => a.spend - b.spend : (a, b) => b.spend - a.spend,
+                'profit': ascending ? (a, b) => a.profit - b.profit : (a, b) => b.profit - a.profit,
+                'puntaje': ascending ? (a, b) => a.puntaje - b.puntaje : (a, b) => b.puntaje - a.puntaje
+            };
+
+            qualityRows.sort(sortFunctions[criteria]);
+
+            // Reordenar DOM
+            const tbody = document.getElementById('quality-tbody');
+            qualityRows.forEach(row => tbody.appendChild(row.element));
+
+            // Actualizar dropdown
+            const qualitySort = document.getElementById('quality-sort');
+            if (qualitySort) {
+                qualitySort.value = criteria;
+            }
+        }
+
+        // Función global para ordenación desde onclick
+        window.sortQualityTable = function(criteria) {
+            sortQualityBy(criteria);
+        };
+
+        // Event listener para el dropdown de ordenación
+        const qualitySortSelect = document.getElementById('quality-sort');
+        if (qualitySortSelect) {
+            qualitySortSelect.addEventListener('change', (e) => {
+                const criteria = e.target.value;
+                // Para el dropdown, siempre usar orden descendente (mayor a menor) excepto para texto
+                qualitySortOrder[criteria] = ['qlead', 'ingresos', 'estudios', 'ocupacion'].includes(criteria);
+                sortQualityBy(criteria);
+            });
+        }
+
+        // Inicializar datos
+        initializeQualityRows();
     }
 });
 </script>
