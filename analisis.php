@@ -368,6 +368,7 @@ function get_quality_lead_data($base_table, $sales_table, $multiply_revenue = fa
                 l.ESTUDIOS,
                 l.OCUPACION,
                 l.PROPOSITO,
+                l.EDAD_ESPECIFICA,
                 l.PUNTAJE,
                 COUNT(l.`#`) AS total_leads,
                 COUNT(v.cliente_id) AS total_sales,
@@ -375,7 +376,7 @@ function get_quality_lead_data($base_table, $sales_table, $multiply_revenue = fa
             FROM `{$base_table}` AS l
             LEFT JOIN `{$sales_table}` AS v ON l.`#` = v.cliente_id
             WHERE l.ANUNCIO IS NOT NULL AND l.ANUNCIO != '' AND l.SEGMENTACION IS NOT NULL
-            GROUP BY l.ANUNCIO, l.SEGMENTACION, l.CAMPAÑA, l.AD_ID, l.QLEAD, l.INGRESOS, l.ESTUDIOS, l.OCUPACION, l.PROPOSITO, l.PUNTAJE;
+            GROUP BY l.ANUNCIO, l.SEGMENTACION, l.CAMPAÑA, l.AD_ID, l.QLEAD, l.INGRESOS, l.ESTUDIOS, l.OCUPACION, l.PROPOSITO, l.EDAD_ESPECIFICA, l.PUNTAJE;
         ";
         $result = $conn->query($sql);
         while ($row = $result->fetch_assoc()) {
@@ -648,9 +649,232 @@ function build_interactive_data($revenue_data, $segmentations_data, $spend_mappi
         ],
         'ads' => $ads
     ];
-}
-
-function build_quality_analysis($quality_lead_data, $segmentations_data, $spend_mapping, $multiply_revenue = false) {
+  }
+  
+  function analyze_factors($quality_segments, $roas_threshold = 1.5) {
+      $factor_analysis = [
+          'good_factors' => [
+              'qlead' => [],
+              'ingresos' => [],
+              'estudios' => [],
+              'ocupacion' => [],
+              'proposito' => [],
+              'edad_especifica' => [],
+              'combinations' => []
+          ],
+          'bad_factors' => [
+              'qlead' => [],
+              'ingresos' => [],
+              'estudios' => [],
+              'ocupacion' => [],
+              'proposito' => [],
+              'edad_especifica' => [],
+              'combinations' => []
+          ],
+          'stats' => [
+              'total_segments' => 0,
+              'high_roas_count' => 0,
+              'low_roas_count' => 0,
+              'avg_roas_good' => 0,
+              'avg_roas_bad' => 0
+          ]
+      ];
+      
+      $good_roas_segments = [];
+      $bad_roas_segments = [];
+      
+      // Clasificar segmentos por ROAS
+      foreach ($quality_segments as $segment) {
+          $factor_analysis['stats']['total_segments']++;
+          
+          if ($segment['roas'] >= $roas_threshold) {
+              $good_roas_segments[] = $segment;
+              $factor_analysis['stats']['high_roas_count']++;
+          } else {
+              $bad_roas_segments[] = $segment;
+              $factor_analysis['stats']['low_roas_count']++;
+          }
+      }
+      
+      // Analizar factores individuales
+      $factor_fields = ['qlead', 'ingresos', 'estudios', 'ocupacion', 'proposito', 'edad_especifica'];
+      
+      foreach ($factor_fields as $field) {
+          $good_counts = [];
+          $bad_counts = [];
+          
+          // Contar apariciones en segmentos buenos
+          foreach ($good_roas_segments as $segment) {
+              $value = $segment[$field] ?? 'Sin Clasificar';
+              $good_counts[$value] = ($good_counts[$value] ?? 0) + $segment['total_leads'];
+          }
+          
+          // Contar apariciones en segmentos malos
+          foreach ($bad_roas_segments as $segment) {
+              $value = $segment[$field] ?? 'Sin Clasificar';
+              $bad_counts[$value] = ($bad_counts[$value] ?? 0) + $segment['total_leads'];
+          }
+          
+          // Calcular ratios y clasificar
+          $all_values = array_unique(array_merge(array_keys($good_counts), array_keys($bad_counts)));
+          
+          foreach ($all_values as $value) {
+              $good_count = $good_counts[$value] ?? 0;
+              $bad_count = $bad_counts[$value] ?? 0;
+              $total_count = $good_count + $bad_count;
+              
+              if ($total_count >= 5) { // Mínimo 5 leads para considerar
+                  $ratio = $good_count / $total_count;
+                  
+                  if ($ratio >= 0.7) { // 70% o más en segmentos buenos
+                      $factor_analysis['good_factors'][$field][$value] = [
+                          'good_leads' => $good_count,
+                          'bad_leads' => $bad_count,
+                          'ratio' => round($ratio * 100, 1),
+                          'total_leads' => $total_count,
+                          'avg_roas_good' => 0,
+                          'avg_roas_bad' => 0
+                      ];
+                      
+                      // Calcular ROAS promedio para este factor
+                      $good_roas_sum = 0; $good_segments_count = 0;
+                      $bad_roas_sum = 0; $bad_segments_count = 0;
+                      
+                      foreach ($good_roas_segments as $segment) {
+                          if (($segment[$field] ?? 'Sin Clasificar') === $value) {
+                              $good_roas_sum += $segment['roas'];
+                              $good_segments_count++;
+                          }
+                      }
+                      
+                      foreach ($bad_roas_segments as $segment) {
+                          if (($segment[$field] ?? 'Sin Clasificar') === $value) {
+                              $bad_roas_sum += $segment['roas'];
+                              $bad_segments_count++;
+                          }
+                      }
+                      
+                      $factor_analysis['good_factors'][$field][$value]['avg_roas_good'] = 
+                          $good_segments_count > 0 ? round($good_roas_sum / $good_segments_count, 2) : 0;
+                      $factor_analysis['good_factors'][$field][$value]['avg_roas_bad'] = 
+                          $bad_segments_count > 0 ? round($bad_roas_sum / $bad_segments_count, 2) : 0;
+                          
+                  } elseif ($ratio <= 0.3) { // 30% o menos en segmentos buenos
+                      $factor_analysis['bad_factors'][$field][$value] = [
+                          'good_leads' => $good_count,
+                          'bad_leads' => $bad_count,
+                          'ratio' => round($ratio * 100, 1),
+                          'total_leads' => $total_count,
+                          'avg_roas_good' => 0,
+                          'avg_roas_bad' => 0
+                      ];
+                      
+                      // Calcular ROAS promedio para este factor
+                      $good_roas_sum = 0; $good_segments_count = 0;
+                      $bad_roas_sum = 0; $bad_segments_count = 0;
+                      
+                      foreach ($good_roas_segments as $segment) {
+                          if (($segment[$field] ?? 'Sin Clasificar') === $value) {
+                              $good_roas_sum += $segment['roas'];
+                              $good_segments_count++;
+                          }
+                      }
+                      
+                      foreach ($bad_roas_segments as $segment) {
+                          if (($segment[$field] ?? 'Sin Clasificar') === $value) {
+                              $bad_roas_sum += $segment['roas'];
+                              $bad_segments_count++;
+                          }
+                      }
+                      
+                      $factor_analysis['bad_factors'][$field][$value]['avg_roas_good'] = 
+                          $good_segments_count > 0 ? round($good_roas_sum / $good_segments_count, 2) : 0;
+                      $factor_analysis['bad_factors'][$field][$value]['avg_roas_bad'] = 
+                          $bad_segments_count > 0 ? round($bad_roas_sum / $bad_segments_count, 2) : 0;
+                  }
+              }
+          }
+      }
+      
+      // Analizar combinaciones de 2 factores más importantes
+      $factor_pairs = [
+          ['qlead', 'ingresos'],
+          ['qlead', 'ocupacion'],
+          ['qlead', 'edad_especifica'],
+          ['ingresos', 'estudios'],
+          ['ingresos', 'ocupacion'],
+          ['ingresos', 'edad_especifica'],
+          ['estudios', 'ocupacion'],
+          ['edad_especifica', 'ocupacion']
+      ];
+      
+      foreach ($factor_pairs as $pair) {
+          $good_combo_counts = [];
+          $bad_combo_counts = [];
+          
+          // Contar combinaciones en segmentos buenos
+          foreach ($good_roas_segments as $segment) {
+              $value1 = $segment[$pair[0]] ?? 'Sin Clasificar';
+              $value2 = $segment[$pair[1]] ?? 'Sin Clasificar';
+              $combo = $value1 . ' + ' . $value2;
+              $good_combo_counts[$combo] = ($good_combo_counts[$combo] ?? 0) + $segment['total_leads'];
+          }
+          
+          // Contar combinaciones en segmentos malos
+          foreach ($bad_roas_segments as $segment) {
+              $value1 = $segment[$pair[0]] ?? 'Sin Clasificar';
+              $value2 = $segment[$pair[1]] ?? 'Sin Clasificar';
+              $combo = $value1 . ' + ' . $value2;
+              $bad_combo_counts[$combo] = ($bad_combo_counts[$combo] ?? 0) + $segment['total_leads'];
+          }
+          
+          // Clasificar combinaciones
+          $all_combos = array_unique(array_merge(array_keys($good_combo_counts), array_keys($bad_combo_counts)));
+          
+          foreach ($all_combos as $combo) {
+              $good_count = $good_combo_counts[$combo] ?? 0;
+              $bad_count = $bad_combo_counts[$combo] ?? 0;
+              $total_count = $good_count + $bad_count;
+              
+              if ($total_count >= 10) { // Mínimo 10 leads para combinaciones
+                  $ratio = $good_count / $total_count;
+                  
+                  if ($ratio >= 0.8) { // 80% o más para combinaciones exitosas
+                      $factor_analysis['good_factors']['combinations'][$combo] = [
+                          'good_leads' => $good_count,
+                          'bad_leads' => $bad_count,
+                          'ratio' => round($ratio * 100, 1),
+                          'total_leads' => $total_count,
+                          'factors' => $pair
+                      ];
+                  } elseif ($ratio <= 0.2) { // 20% o menos para combinaciones problemáticas
+                      $factor_analysis['bad_factors']['combinations'][$combo] = [
+                          'good_leads' => $good_count,
+                          'bad_leads' => $bad_count,
+                          'ratio' => round($ratio * 100, 1),
+                          'total_leads' => $total_count,
+                          'factors' => $pair
+                      ];
+                  }
+              }
+          }
+      }
+      
+      // Calcular ROAS promedio
+      if (!empty($good_roas_segments)) {
+          $total_good_roas = array_sum(array_column($good_roas_segments, 'roas'));
+          $factor_analysis['stats']['avg_roas_good'] = round($total_good_roas / count($good_roas_segments), 2);
+      }
+      
+      if (!empty($bad_roas_segments)) {
+          $total_bad_roas = array_sum(array_column($bad_roas_segments, 'roas'));
+          $factor_analysis['stats']['avg_roas_bad'] = round($total_bad_roas / count($bad_roas_segments), 2);
+      }
+      
+      return $factor_analysis;
+  }
+  
+  function build_quality_analysis($quality_lead_data, $segmentations_data, $spend_mapping, $multiply_revenue = false) {
     $quality_segments = [];
     $total_revenue_all = 0;
     $total_spend_all = 0;
@@ -662,6 +886,7 @@ function build_quality_analysis($quality_lead_data, $segmentations_data, $spend_
         $estudios = !empty($row['ESTUDIOS']) ? $row['ESTUDIOS'] : 'No Especificado';
         $ocupacion = !empty($row['OCUPACION']) ? $row['OCUPACION'] : 'No Especificado';
         $proposito = !empty($row['PROPOSITO']) ? $row['PROPOSITO'] : 'No Especificado';
+        $edad_especifica = !empty($row['EDAD_ESPECIFICA']) ? $row['EDAD_ESPECIFICA'] : 'No Especificado';
         $puntaje = !empty($row['PUNTAJE']) ? floatval($row['PUNTAJE']) : 0;
         
         $ad_name_normalized = $row['ANUNCIO_NORMALIZED'];
@@ -671,7 +896,7 @@ function build_quality_analysis($quality_lead_data, $segmentations_data, $spend_
         $sales = (int)$row['total_sales'];
         
         // Crear clave única para este segmento de calidad
-        $quality_key = $qlead . '|' . $ingresos . '|' . $estudios . '|' . $ocupacion;
+        $quality_key = $qlead . '|' . $ingresos . '|' . $estudios . '|' . $ocupacion . '|' . $edad_especifica;
         
         if (!isset($quality_segments[$quality_key])) {
             $quality_segments[$quality_key] = [
@@ -680,6 +905,7 @@ function build_quality_analysis($quality_lead_data, $segmentations_data, $spend_
                 'estudios' => $estudios,
                 'ocupacion' => $ocupacion,
                 'proposito' => $proposito,
+                'edad_especifica' => $edad_especifica,
                 'avg_puntaje' => 0,
                 'total_leads' => 0,
                 'total_sales' => 0,
@@ -786,17 +1012,21 @@ function build_quality_analysis($quality_lead_data, $segmentations_data, $spend_
         return $b['roas'] - $a['roas'];
     });
     
-    $total_roas_all = ($total_spend_all > 0) ? $total_revenue_all / $total_spend_all : 0;
-    
-    return [
-        'summary' => [
-            'total_revenue' => $total_revenue_all,
-            'total_spend' => $total_spend_all,
-            'total_roas' => $total_roas_all,
-            'multiply_revenue' => $multiply_revenue
-        ],
-        'segments' => $quality_segments
-    ];
+      $total_roas_all = ($total_spend_all > 0) ? $total_revenue_all / $total_spend_all : 0;
+      
+      // Realizar análisis de factores
+      $factor_analysis = analyze_factors($quality_segments, 1.5);
+      
+      return [
+          'summary' => [
+              'total_revenue' => $total_revenue_all,
+              'total_spend' => $total_spend_all,
+              'total_roas' => $total_roas_all,
+              'multiply_revenue' => $multiply_revenue
+          ],
+          'segments' => $quality_segments,
+          'factor_analysis' => $factor_analysis
+      ];
 }
 
 if (DEBUG_MODE) {
@@ -966,6 +1196,11 @@ if (DEBUG_MODE) {
                     <button id="tab-quality" class="tab-button border-b-2 border-transparent py-4 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 hover:border-gray-300">
                         🎯 Análisis por Calidad de Leads
                     </button>
+                    <?php if (isset($quality_data['factor_analysis'])): ?>
+                    <button id="tab-factors" class="tab-button border-b-2 border-transparent py-4 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 hover:border-gray-300">
+                        🔍 Análisis de Factores
+                    </button>
+                    <?php endif; ?>
                     <?php endif; ?>
                 </nav>
             </div>
@@ -1223,6 +1458,10 @@ if (DEBUG_MODE) {
                                 <option value="spend">Gasto (Mayor a Menor)</option>
                                 <option value="puntaje">Puntaje (Mayor a Menor)</option>
                                 <option value="qlead">Calidad Lead (A-Z)</option>
+                                <option value="ingresos">Ingresos (A-Z)</option>
+                                <option value="estudios">Estudios (A-Z)</option>
+                                <option value="ocupacion">Ocupación (A-Z)</option>
+                                <option value="edad_especifica">Edad (A-Z)</option>
                             </select>
                         </div>
                     </div>
@@ -1241,6 +1480,9 @@ if (DEBUG_MODE) {
                                     </th>
                                     <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sortable cursor-pointer hover:bg-gray-100" onclick="sortQualityTable('ocupacion')">
                                         Ocupación <span class="ml-1">↕️</span>
+                                    </th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sortable cursor-pointer hover:bg-gray-100" onclick="sortQualityTable('edad_especifica')">
+                                        Edad <span class="ml-1">↕️</span>
                                     </th>
                                     <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sortable cursor-pointer hover:bg-gray-100" onclick="sortQualityTable('leads')">
                                         Leads <span class="ml-1">↕️</span>
@@ -1274,7 +1516,8 @@ if (DEBUG_MODE) {
                                     data-qlead="<?php echo htmlspecialchars($segment['qlead']); ?>"
                                     data-ingresos="<?php echo htmlspecialchars($segment['ingresos']); ?>"
                                     data-estudios="<?php echo htmlspecialchars($segment['estudios']); ?>"
-                                    data-ocupacion="<?php echo htmlspecialchars($segment['ocupacion']); ?>">
+                                    data-ocupacion="<?php echo htmlspecialchars($segment['ocupacion']); ?>"
+                                    data-edad_especifica="<?php echo htmlspecialchars($segment['edad_especifica']); ?>">
                                     
                                     <td class="px-4 py-4 text-sm font-medium text-gray-900">
                                         <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium 
@@ -1287,6 +1530,7 @@ if (DEBUG_MODE) {
                                     <td class="px-4 py-4 text-sm text-gray-900"><?php echo htmlspecialchars($segment['ingresos']); ?></td>
                                     <td class="px-4 py-4 text-sm text-gray-900"><?php echo htmlspecialchars($segment['estudios']); ?></td>
                                     <td class="px-4 py-4 text-sm text-gray-900"><?php echo htmlspecialchars($segment['ocupacion']); ?></td>
+                                    <td class="px-4 py-4 text-sm text-gray-900"><?php echo htmlspecialchars($segment['edad_especifica']); ?></td>
                                     <td class="px-4 py-4 text-sm font-semibold text-blue-600"><?php echo number_format($segment['total_leads']); ?></td>
                                     <td class="px-4 py-4 text-sm font-semibold text-purple-600"><?php echo number_format($segment['total_sales']); ?></td>
                                     <td class="px-4 py-4 text-sm font-semibold <?php echo $segment['conversion_rate'] >= 5 ? 'text-green-600' : ($segment['conversion_rate'] >= 2 ? 'text-yellow-600' : 'text-red-600'); ?>">
@@ -1307,6 +1551,177 @@ if (DEBUG_MODE) {
                                 <?php endforeach; ?>
                             </tbody>
                         </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <?php endif; ?>
+        
+        <!-- Contenido de Análisis de Factores -->
+        <?php if (isset($quality_data['factor_analysis'])): ?>
+        <div id="content-factors" class="tab-content hidden">
+            <div class="space-y-6">
+                <!-- Estadísticas generales -->
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+                    <div class="bg-green-50 p-4 rounded-lg border border-green-200">
+                        <div class="text-2xl font-bold text-green-600"><?php echo $quality_data['factor_analysis']['stats']['high_roas_count']; ?></div>
+                        <div class="text-sm text-green-700">Segmentos ROAS ≥ 1.5x</div>
+                        <div class="text-xs text-green-600">ROAS Prom: <?php echo $quality_data['factor_analysis']['stats']['avg_roas_good']; ?>x</div>
+                    </div>
+                    <div class="bg-red-50 p-4 rounded-lg border border-red-200">
+                        <div class="text-2xl font-bold text-red-600"><?php echo $quality_data['factor_analysis']['stats']['low_roas_count']; ?></div>
+                        <div class="text-sm text-red-700">Segmentos ROAS < 1.5x</div>
+                        <div class="text-xs text-red-600">ROAS Prom: <?php echo $quality_data['factor_analysis']['stats']['avg_roas_bad']; ?>x</div>
+                    </div>
+                    <div class="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                        <div class="text-2xl font-bold text-blue-600"><?php echo $quality_data['factor_analysis']['stats']['total_segments']; ?></div>
+                        <div class="text-sm text-blue-700">Total Segmentos</div>
+                        <div class="text-xs text-blue-600">Analizados</div>
+                    </div>
+                    <div class="bg-purple-50 p-4 rounded-lg border border-purple-200">
+                        <div class="text-2xl font-bold text-purple-600"><?php echo $quality_data['factor_analysis']['stats']['total_segments'] > 0 ? round(($quality_data['factor_analysis']['stats']['high_roas_count'] / $quality_data['factor_analysis']['stats']['total_segments']) * 100, 1) : 0; ?>%</div>
+                        <div class="text-sm text-purple-700">% Éxito</div>
+                        <div class="text-xs text-purple-600">ROAS ≥ 1.5x</div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <!-- Factores Positivos -->
+                    <div class="bg-green-50 p-6 rounded-lg border border-green-200">
+                        <h4 class="text-lg font-semibold text-green-800 mb-4">✅ Factores que Generan ROAS Alto (≥1.5x)</h4>
+                        
+                        <?php 
+                        $field_names = [
+                            'qlead' => 'Calidad Lead',
+                            'ingresos' => 'Nivel de Ingresos',
+                            'estudios' => 'Nivel de Estudios',
+                            'ocupacion' => 'Ocupación',
+                            'proposito' => 'Propósito',
+                            'edad_especifica' => 'Edad Específica'
+                        ];
+                        
+                        foreach (['qlead', 'ingresos', 'estudios', 'ocupacion', 'proposito', 'edad_especifica'] as $field): ?>
+                            <?php if (!empty($quality_data['factor_analysis']['good_factors'][$field])): ?>
+                                <div class="mb-4">
+                                    <h5 class="font-medium text-green-700 mb-2"><?php echo $field_names[$field]; ?></h5>
+                                    <div class="space-y-2">
+                                        <?php foreach ($quality_data['factor_analysis']['good_factors'][$field] as $value => $stats): ?>
+                                            <div class="bg-white p-3 rounded text-sm border">
+                                                <div class="flex justify-between items-center mb-1">
+                                                    <span class="font-medium"><?php echo htmlspecialchars($value); ?></span>
+                                                    <span class="text-green-600 font-semibold"><?php echo $stats['ratio']; ?>%</span>
+                                                </div>
+                                                <div class="text-xs text-gray-600">
+                                                    <?php echo $stats['good_leads']; ?> leads exitosos de <?php echo $stats['total_leads']; ?> total
+                                                    <?php if ($stats['avg_roas_good'] > 0): ?>
+                                                        • ROAS prom: <?php echo $stats['avg_roas_good']; ?>x
+                                                    <?php endif; ?>
+                                                </div>
+                                            </div>
+                                        <?php endforeach; ?>
+                                    </div>
+                                </div>
+                            <?php endif; ?>
+                        <?php endforeach; ?>
+                        
+                        <!-- Combinaciones positivas -->
+                        <?php if (!empty($quality_data['factor_analysis']['good_factors']['combinations'])): ?>
+                            <div class="mt-4">
+                                <h5 class="font-medium text-green-700 mb-2">🎯 Combinaciones Exitosas</h5>
+                                <div class="space-y-2">
+                                    <?php foreach ($quality_data['factor_analysis']['good_factors']['combinations'] as $combo => $stats): ?>
+                                        <div class="bg-white p-3 rounded text-sm border">
+                                            <div class="flex justify-between items-center mb-1">
+                                                <span class="font-medium"><?php echo htmlspecialchars($combo); ?></span>
+                                                <span class="text-green-600 font-semibold"><?php echo $stats['ratio']; ?>%</span>
+                                            </div>
+                                            <div class="text-xs text-gray-600">
+                                                <?php echo $stats['good_leads']; ?> leads exitosos de <?php echo $stats['total_leads']; ?> total
+                                            </div>
+                                        </div>
+                                    <?php endforeach; ?>
+                                </div>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+
+                    <!-- Factores Negativos -->
+                    <div class="bg-red-50 p-6 rounded-lg border border-red-200">
+                        <h4 class="text-lg font-semibold text-red-800 mb-4">❌ Factores que Generan ROAS Bajo (<1.5x)</h4>
+                        
+                        <?php foreach (['qlead', 'ingresos', 'estudios', 'ocupacion', 'proposito', 'edad_especifica'] as $field): ?>
+                            <?php if (!empty($quality_data['factor_analysis']['bad_factors'][$field])): ?>
+                                <div class="mb-4">
+                                    <h5 class="font-medium text-red-700 mb-2"><?php echo $field_names[$field]; ?></h5>
+                                    <div class="space-y-2">
+                                        <?php foreach ($quality_data['factor_analysis']['bad_factors'][$field] as $value => $stats): ?>
+                                            <div class="bg-white p-3 rounded text-sm border">
+                                                <div class="flex justify-between items-center mb-1">
+                                                    <span class="font-medium"><?php echo htmlspecialchars($value); ?></span>
+                                                    <span class="text-red-600 font-semibold"><?php echo $stats['ratio']; ?>%</span>
+                                                </div>
+                                                <div class="text-xs text-gray-600">
+                                                    <?php echo $stats['good_leads']; ?> leads exitosos de <?php echo $stats['total_leads']; ?> total
+                                                    <?php if ($stats['avg_roas_bad'] > 0): ?>
+                                                        • ROAS prom: <?php echo $stats['avg_roas_bad']; ?>x
+                                                    <?php endif; ?>
+                                                </div>
+                                            </div>
+                                        <?php endforeach; ?>
+                                    </div>
+                                </div>
+                            <?php endif; ?>
+                        <?php endforeach; ?>
+                        
+                        <!-- Combinaciones negativas -->
+                        <?php if (!empty($quality_data['factor_analysis']['bad_factors']['combinations'])): ?>
+                            <div class="mt-4">
+                                <h5 class="font-medium text-red-700 mb-2">⚠️ Combinaciones Problemáticas</h5>
+                                <div class="space-y-2">
+                                    <?php foreach ($quality_data['factor_analysis']['bad_factors']['combinations'] as $combo => $stats): ?>
+                                        <div class="bg-white p-3 rounded text-sm border">
+                                            <div class="flex justify-between items-center mb-1">
+                                                <span class="font-medium"><?php echo htmlspecialchars($combo); ?></span>
+                                                <span class="text-red-600 font-semibold"><?php echo $stats['ratio']; ?>%</span>
+                                            </div>
+                                            <div class="text-xs text-gray-600">
+                                                <?php echo $stats['good_leads']; ?> leads exitosos de <?php echo $stats['total_leads']; ?> total
+                                            </div>
+                                        </div>
+                                    <?php endforeach; ?>
+                                </div>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                </div>
+                
+                <!-- Recomendaciones -->
+                <div class="bg-blue-50 p-6 rounded-lg border border-blue-200">
+                    <h5 class="font-semibold text-blue-800 mb-4">💡 Recomendaciones de Acción</h5>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <h6 class="font-medium text-blue-700 mb-2">🎯 Para Optimizar:</h6>
+                            <ul class="text-sm text-blue-700 space-y-1">
+                                <li>• <strong>Enfócate en:</strong> Los factores positivos identificados</li>
+                                <li>• <strong>Incrementa gasto:</strong> En segmentos con factores exitosos</li>
+                                <li>• <strong>Crea audiencias:</strong> Basadas en combinaciones exitosas</li>
+                            </ul>
+                        </div>
+                        <div>
+                            <h6 class="font-medium text-blue-700 mb-2">🚫 Para Evitar:</h6>
+                            <ul class="text-sm text-blue-700 space-y-1">
+                                <li>• <strong>Reduce inversión:</strong> En factores problemáticos</li>
+                                <li>• <strong>Excluye audiencias:</strong> Con combinaciones negativas</li>
+                                <li>• <strong>Ajusta creativos:</strong> Para atraer perfiles exitosos</li>
+                            </ul>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-4 p-4 bg-yellow-100 rounded border border-yellow-300">
+                        <p class="text-sm text-yellow-800">
+                            <strong>💡 Tip:</strong> Los factores con mayor cantidad de leads son más confiables para la toma de decisiones. 
+                            Prioriza factores con al menos 10+ leads en el análisis.
+                        </p>
                     </div>
                 </div>
             </div>
@@ -2047,14 +2462,15 @@ document.addEventListener('DOMContentLoaded', function() {
                     ingresos: row.dataset.ingresos,
                     estudios: row.dataset.estudios,
                     ocupacion: row.dataset.ocupacion,
-                    leads: parseFloat(cells[4]?.textContent.replace(/,/g, '')) || 0,
-                    sales: parseFloat(cells[5]?.textContent.replace(/,/g, '')) || 0,
-                    conversion_rate: parseFloat(cells[6]?.textContent.replace(/%/g, '')) || 0,
-                    roas: parseFloat(cells[7]?.textContent.replace(/x/g, '')) || 0,
-                    revenue: parseFloat(cells[8]?.textContent.replace(/[\$,]/g, '')) || 0,
-                    spend: parseFloat(cells[9]?.textContent.replace(/[\$,]/g, '')) || 0,
-                    profit: parseFloat(cells[10]?.textContent.replace(/[\$,]/g, '')) || 0,
-                    puntaje: parseFloat(cells[11]?.textContent) || 0
+                    edad_especifica: row.dataset.edad_especifica,
+                    leads: parseFloat(cells[5]?.textContent.replace(/,/g, '')) || 0,
+                    sales: parseFloat(cells[6]?.textContent.replace(/,/g, '')) || 0,
+                    conversion_rate: parseFloat(cells[7]?.textContent.replace(/%/g, '')) || 0,
+                    roas: parseFloat(cells[8]?.textContent.replace(/x/g, '')) || 0,
+                    revenue: parseFloat(cells[9]?.textContent.replace(/[\$,]/g, '')) || 0,
+                    spend: parseFloat(cells[10]?.textContent.replace(/[\$,]/g, '')) || 0,
+                    profit: parseFloat(cells[11]?.textContent.replace(/[\$,]/g, '')) || 0,
+                    puntaje: parseFloat(cells[12]?.textContent) || 0
                 };
             });
         }
@@ -2073,6 +2489,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 'ingresos': ascending ? (a, b) => a.ingresos.localeCompare(b.ingresos) : (a, b) => b.ingresos.localeCompare(a.ingresos),
                 'estudios': ascending ? (a, b) => a.estudios.localeCompare(b.estudios) : (a, b) => b.estudios.localeCompare(a.estudios),
                 'ocupacion': ascending ? (a, b) => a.ocupacion.localeCompare(b.ocupacion) : (a, b) => b.ocupacion.localeCompare(a.ocupacion),
+                'edad_especifica': ascending ? (a, b) => a.edad_especifica.localeCompare(b.edad_especifica) : (a, b) => b.edad_especifica.localeCompare(a.edad_especifica),
                 'leads': ascending ? (a, b) => a.leads - b.leads : (a, b) => b.leads - a.leads,
                 'sales': ascending ? (a, b) => a.sales - b.sales : (a, b) => b.sales - a.sales,
                 'conversion_rate': ascending ? (a, b) => a.conversion_rate - b.conversion_rate : (a, b) => b.conversion_rate - a.conversion_rate,
@@ -2107,7 +2524,7 @@ document.addEventListener('DOMContentLoaded', function() {
             qualitySortSelect.addEventListener('change', (e) => {
                 const criteria = e.target.value;
                 // Para el dropdown, siempre usar orden descendente (mayor a menor) excepto para texto
-                qualitySortOrder[criteria] = ['qlead', 'ingresos', 'estudios', 'ocupacion'].includes(criteria);
+                qualitySortOrder[criteria] = ['qlead', 'ingresos', 'estudios', 'ocupacion', 'edad_especifica'].includes(criteria);
                 sortQualityBy(criteria);
             });
         }
